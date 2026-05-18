@@ -1,0 +1,13 @@
+Package: enigma2-plugin-extensions-fbc-channelspeedchange
+Version: 0.3.0
+Architecture: all
+Maintainer: empyfi <empyfi@users.noreply.github.com>
+Section: extensions
+Priority: optional
+Depends: enigma2
+Description: FBC-accelerated channel zapping for OpenATV
+ Pre-tunes next, previous, and history channels on free FBC demodulators
+ so that channel switches complete in milliseconds. Recording and PiP
+ always take precedence; the pre-tune pool releases demodulators on demand
+ and re-arms automatically afterwards.
+Homepage: https://github.com/empyfi/FBC-ChannelSpeedChange

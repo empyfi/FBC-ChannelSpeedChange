@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sidecar setup descriptor. Not auto-merged into core enigma2 setup.xml -
+     reserved for future use if an entry under Setup -> Reception is added. -->
+<setupxml>
+  <setup key="fbc_csc" title="FBC ChannelSpeedChange">
+    <item text="Enable plugin">config.plugins.fbc_csc.enabled</item>
+    <item text="Pre-tune slots for NEXT channel">config.plugins.fbc_csc.pretune_next</item>
+    <item text="Pre-tune slots for PREVIOUS channel">config.plugins.fbc_csc.pretune_prev</item>
+    <item text="Pre-tune slots for HISTORY channel">config.plugins.fbc_csc.pretune_history</item>
+    <item text="Release demods when recording starts">config.plugins.fbc_csc.release_for_recording</item>
+    <item text="Release demods when PiP starts">config.plugins.fbc_csc.release_for_pip</item>
+    <item text="Verbose debug logging">config.plugins.fbc_csc.debug_log</item>
+  </setup>
+</setupxml>
