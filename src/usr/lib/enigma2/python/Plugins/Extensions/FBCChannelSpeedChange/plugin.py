@@ -49,18 +49,24 @@ def open_setup(session, **kwargs):
         error("open_setup crashed (caught): %r" % exc)
 
 
+_DESCRIPTION = (
+    "Accelerates channel zapping by pre-tuning the next, previous "
+    "and last-watched channel on free FBC tuners."
+)
+
+
 def Plugins(**kwargs):
     return [
         PluginDescriptor(
             name="FBC ChannelSpeedChange",
-            description="Accelerate channel zapping using FBC pre-tune",
+            description=_DESCRIPTION,
             where=PluginDescriptor.WHERE_SESSIONSTART,
             needsRestart=False,
             fnc=session_start,
         ),
         PluginDescriptor(
             name="FBC ChannelSpeedChange",
-            description="Settings for the FBC zap accelerator",
+            description=_DESCRIPTION,
             where=PluginDescriptor.WHERE_PLUGINMENU,
             icon="plugin.png",
             fnc=open_setup,

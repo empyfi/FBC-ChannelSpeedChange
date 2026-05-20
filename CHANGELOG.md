@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.1] - 2026-05-20
+
+### Added
+- Plugin icon (`plugin.png`, 100×40 px) shown next to the
+  entry in the OpenATV plugin browser.
+
+### Changed
+- Plugin browser description rewritten to one sentence
+  explaining what the plugin actually does
+  ("Accelerates channel zapping by pre-tuning the next,
+  previous and last-watched channel on free FBC tuners").
+  The same text is now used for both `PluginDescriptor`
+  entries.
+
 ## [0.3.0] - 2026-05-18
 
 Initial public release.
