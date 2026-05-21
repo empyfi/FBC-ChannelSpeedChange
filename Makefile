@@ -15,7 +15,8 @@ ipk:
 	@rm -rf $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)/data $(BUILD_DIR)/control
 	cp -r $(SRC_DIR)/usr $(BUILD_DIR)/data/
-	cp $(CONTROL_DIR)/control $(BUILD_DIR)/control/
+	cp $(CONTROL_DIR)/* $(BUILD_DIR)/control/
+	chmod 755 $(BUILD_DIR)/control/postrm 2>/dev/null || true
 	echo "2.0" > $(BUILD_DIR)/debian-binary
 	cd $(BUILD_DIR)/data    && tar --owner=0 --group=0 -czf ../data.tar.gz .
 	cd $(BUILD_DIR)/control && tar --owner=0 --group=0 -czf ../control.tar.gz .

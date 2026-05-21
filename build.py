@@ -69,7 +69,13 @@ def _make_tar_gz(out_path, src_root, arcname_prefix=""):
                 info = tar.gettarinfo(full, arcname=arc)
                 info.uid = info.gid = 0
                 info.uname = info.gname = "root"
-                info.mode = 0o644
+                # opkg maintainer scripts must be executable; everything
+                # else lands as a plain data file. The names are the
+                # standard four ipkg / dpkg recognises.
+                if fname in ("preinst", "postinst", "prerm", "postrm"):
+                    info.mode = 0o755
+                else:
+                    info.mode = 0o644
                 with open(full, "rb") as fh:
                     tar.addfile(info, fh)
 

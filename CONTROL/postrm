@@ -1,0 +1,10 @@
+#!/bin/sh
+# opkg post-remove maintainer script.
+#
+# Wipes the plugin directory in full. opkg only removes files it
+# installed; Python's bytecode cache (__pycache__/*.pyc) and any
+# stray locale catalogs created at runtime stay behind otherwise,
+# leaving a ghost entry in the enigma2 plugin browser.
+
+rm -rf /usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange > /dev/null 2>&1
+exit 0

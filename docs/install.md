@@ -100,6 +100,24 @@ The plugin restores all wrapped InfoBar methods on shutdown and
 deletes its throwaway `/tmp/fbc_csc_pretune_*.ts` files. Zap
 behaviour returns to stock immediately after the restart.
 
+### One-time cleanup for installs from v0.3.3 or earlier
+
+Releases up to and including v0.3.3 shipped without an opkg `postrm`
+maintainer script, so after `opkg remove` the plugin's directory at
+`/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/`
+still contains Python bytecode that the runtime wrote at startup
+(`__pycache__/*.pyc`). The leftover bytecode makes the enigma2
+plugin browser keep listing the plugin (with no icon, since
+`plugin.png` is gone). Wipe the directory once:
+
+```sh
+rm -rf /usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange
+init 4 && sleep 2 && init 3
+```
+
+v0.3.4 and later carry a `postrm` script that does this automatically
+on uninstall.
+
 ## Troubleshooting
 
 ### No HITs in the log, every zap is a MISS
