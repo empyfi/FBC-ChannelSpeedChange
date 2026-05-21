@@ -3,6 +3,7 @@ from Components.ActionMap import ActionMap
 from Components.ConfigList import ConfigListScreen
 from Components.config import getConfigListEntry
 
+from . import _
 from .config import cfg
 
 
@@ -22,23 +23,23 @@ class FBCChannelSpeedChangeSetup(ConfigListScreen, Screen):
         self.setTitle("FBC ChannelSpeedChange")
 
         entries = [
-            getConfigListEntry("Enable plugin", cfg.enabled),
-            getConfigListEntry("Allow tuner allocation (master safety)", cfg.allow_pretune),
-            getConfigListEntry("Use real pre-tune (prepare+start, faster)", cfg.use_real_pretune),
-            getConfigListEntry("Pre-tune NEXT channel", cfg.pretune_next),
-            getConfigListEntry("Pre-tune PREVIOUS channel", cfg.pretune_prev),
-            getConfigListEntry("Pre-tune LAST channel (history)", cfg.pretune_history),
-            getConfigListEntry("Release demods when recording starts", cfg.release_for_recording),
-            getConfigListEntry("Release demods when PiP starts", cfg.release_for_pip),
-            getConfigListEntry("Show zap latency OSD", cfg.show_osd_timing),
-            getConfigListEntry("Verbose debug logging", cfg.debug_log),
+            getConfigListEntry(_("Enable plugin"), cfg.enabled),
+            getConfigListEntry(_("Allow tuner allocation (master safety)"), cfg.allow_pretune),
+            getConfigListEntry(_("Use real pre-tune (prepare+start, faster)"), cfg.use_real_pretune),
+            getConfigListEntry(_("Pre-tune NEXT channel"), cfg.pretune_next),
+            getConfigListEntry(_("Pre-tune PREVIOUS channel"), cfg.pretune_prev),
+            getConfigListEntry(_("Pre-tune LAST channel (history)"), cfg.pretune_history),
+            getConfigListEntry(_("Release demods when recording starts"), cfg.release_for_recording),
+            getConfigListEntry(_("Release demods when PiP starts"), cfg.release_for_pip),
+            getConfigListEntry(_("Show zap latency OSD"), cfg.show_osd_timing),
+            getConfigListEntry(_("Verbose debug logging"), cfg.debug_log),
         ]
 
         ConfigListScreen.__init__(self, entries, session=session)
 
         from Components.Label import Label
-        self["key_red"] = Label("Cancel")
-        self["key_green"] = Label("Save")
+        self["key_red"] = Label(_("Cancel"))
+        self["key_green"] = Label(_("Save"))
 
         self["actions"] = ActionMap(
             ["SetupActions", "ColorActions"],

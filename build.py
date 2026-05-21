@@ -22,8 +22,14 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(ROOT, "src")
 CONTROL_DIR = os.path.join(ROOT, "CONTROL")
 BUILD_DIR = os.path.join(ROOT, "build")
+PO_DIR = os.path.join(ROOT, "po")
+LOCALE_DIR = os.path.join(
+    SRC_DIR, "usr", "lib", "enigma2", "python", "Plugins",
+    "Extensions", "FBCChannelSpeedChange", "locale",
+)
 
 PACKAGE_NAME = "enigma2-plugin-extensions-fbc-channelspeedchange"
+TEXT_DOMAIN = "FBCChannelSpeedChange"
 
 
 def _read_control_field(field):
@@ -97,6 +103,37 @@ def _make_ar(out_path, members):
                 fh.write(b"\n")
 
 
+def _compile_translations():
+    """Walk po/*.po and compile each to
+    src/.../locale/<lang>/LC_MESSAGES/<domain>.mo so the tarball
+    walker picks them up. Wipes the locale tree first so removed
+    languages disappear.
+    """
+    if not os.path.isdir(PO_DIR):
+        return 0
+    # Drop any stale .mo files from previous builds.
+    if os.path.isdir(LOCALE_DIR):
+        import shutil
+        shutil.rmtree(LOCALE_DIR)
+
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    from compile_po import compile_po_to_mo  # pure-Python, no deps
+
+    compiled = 0
+    for entry in sorted(os.listdir(PO_DIR)):
+        if not entry.endswith(".po"):
+            continue
+        lang = entry[:-3]
+        po_path = os.path.join(PO_DIR, entry)
+        mo_dir = os.path.join(LOCALE_DIR, lang, "LC_MESSAGES")
+        os.makedirs(mo_dir, exist_ok=True)
+        mo_path = os.path.join(mo_dir, "%s.mo" % TEXT_DOMAIN)
+        n = compile_po_to_mo(po_path, mo_path)
+        print("  %s -> %s (%d entries)" % (po_path, mo_path, n))
+        compiled += 1
+    return compiled
+
+
 def main():
     version = _read_control_field("Version")
     arch = _read_control_field("Architecture")
@@ -108,6 +145,10 @@ def main():
         import shutil
         shutil.rmtree(BUILD_DIR)
     os.makedirs(BUILD_DIR)
+
+    n_locales = _compile_translations()
+    if n_locales:
+        print("Compiled %d translation file(s)." % n_locales)
 
     data_tar = os.path.join(BUILD_DIR, "data.tar.gz")
     control_tar = os.path.join(BUILD_DIR, "control.tar.gz")

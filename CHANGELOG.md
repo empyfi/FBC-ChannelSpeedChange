@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.2] - 2026-05-21
+
+### Added
+- gettext-based i18n. All user-facing strings (plugin
+  description, all settings labels, the Cancel/Save buttons
+  and the watchdog popup) now go through `_()` and pick up the
+  enigma2 UI language at runtime.
+- German translation under `po/de.po`. Wraps the 14 visible
+  strings into proper German labels.
+- `tools/compile_po.py` — pure-Python `.po` to `.mo` compiler
+  used by the build (no external `msgfmt` required).
+- `build.py` compiles every `po/*.po` into
+  `src/.../locale/<lang>/LC_MESSAGES/FBCChannelSpeedChange.mo`
+  before packaging, so the IPK ships ready-to-use catalogs.
+
+### Changed
+- Package `__init__.py` wires `gettext.bindtextdomain` against
+  the plugin's own locale directory and falls back to an
+  identity `_()` when enigma2 modules are unavailable
+  (off-box tests).
+
 ## [0.3.1] - 2026-05-20
 
 ### Added

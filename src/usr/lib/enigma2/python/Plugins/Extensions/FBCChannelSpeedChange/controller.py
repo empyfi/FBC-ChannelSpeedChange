@@ -9,6 +9,7 @@ Created from plugin.py's WHERE_SESSIONSTART hook. There is one and only
 one Controller per enigma2 session.
 """
 
+from . import _
 from .logger import info, debug, warn, error
 from .config import cfg
 from .fbc_pretune_pool import FBCPreTunePool, Role
@@ -179,8 +180,8 @@ class Controller:
             from Tools.Notifications import AddPopup
             from Screens.MessageBox import MessageBox
             AddPopup(
-                "FBC-ChannelSpeedChange disabled itself for safety.\n"
-                "Reason: %s\nRe-enable in Plugins after restart." % reason,
+                _("FBC-ChannelSpeedChange disabled itself for safety.\n"
+                  "Reason: %s\nRe-enable in Plugins after restart.") % reason,
                 MessageBox.TYPE_WARNING, 10,
                 id="FBC_CSC_SELF_DISABLED",
             )

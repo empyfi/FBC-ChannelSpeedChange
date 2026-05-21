@@ -1,0 +1,77 @@
+# FBC-ChannelSpeedChange — translation template
+# Copyright (C) 2026 empyfi
+# This file is distributed under the same licence as the
+# FBC-ChannelSpeedChange package (GPL-2.0-or-later).
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FBCChannelSpeedChange 0.3.2\n"
+"Report-Msgid-Bugs-To: https://github.com/empyfi/FBC-ChannelSpeedChange/issues\n"
+"POT-Creation-Date: 2026-05-21 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/plugin.py
+msgid ""
+"Accelerates channel zapping by pre-tuning the next, previous and "
+"last-watched channel on free FBC tuners."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Enable plugin"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Allow tuner allocation (master safety)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Use real pre-tune (prepare+start, faster)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-tune NEXT channel"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-tune PREVIOUS channel"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-tune LAST channel (history)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Release demods when recording starts"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Release demods when PiP starts"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Show zap latency OSD"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Verbose debug logging"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Cancel"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Save"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/controller.py
+msgid ""
+"FBC-ChannelSpeedChange disabled itself for safety.\n"
+"Reason: %s\n"
+"Re-enable in Plugins after restart."
+msgstr ""
