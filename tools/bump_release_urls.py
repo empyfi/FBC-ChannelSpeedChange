@@ -1,10 +1,9 @@
 """Bump release download URLs in README.md and docs/install.md.
 
-Pure Python stdlib. Reads the current version from CONTROL/control and
-Makefile (they must agree), then rewrites two narrowly-scoped patterns
-in the documentation to point at a new version:
+Pure Python stdlib. Rewrites two narrowly-scoped patterns in the
+documentation to point at a new version:
 
-  1. The GitHub release download URL — both the tag in the path and
+  1. The GitHub release download URL - both the tag in the path and
      the version embedded in the IPK filename.
   2. The "vX.Y.Z is the current build" sentence in README.md.
 
@@ -16,14 +15,16 @@ Usage:
     python tools/bump_release_urls.py --to 0.3.4 --dry-run
     python tools/bump_release_urls.py --check
 
+The "from" version is derived from the docs themselves (the version
+the existing release URLs point at). CONTROL/control and the Makefile
+are never written to by this script. The two are deliberately
+decoupled so the bump can be invoked at any point in the release
+flow regardless of whether CONTROL/control has already been bumped.
+
 `--check` exits 1 if the documentation contains a release URL or
 current-build sentence that does not match the version recorded in
-CONTROL/control. Intended for use in CI / pre-tag verification.
-
-CONTROL/control and the Makefile are NOT touched by this script -
-those are the authoritative source of the current version and must
-be bumped manually as part of the release commit before invoking
-this tool.
+CONTROL/control (and Makefile, which must agree). Intended for use
+in CI / pre-tag verification.
 """
 
 import argparse
@@ -152,13 +153,51 @@ def bump_file(path, old, new, dry_run):
     return path, n_url, n_cb, []
 
 
+def doc_release_version():
+    """Pick the version the documentation's release URLs currently point at.
+
+    Looks at every doc file and returns the first release URL's version.
+    If multiple URLs disagree, raises - the docs are inconsistent and the
+    operator should reconcile them before bumping.
+
+    The docs are the source of truth for "what version do install
+    instructions ship right now"; CONTROL/control is the source of truth
+    for "what version is being built". These are deliberately decoupled
+    so this script can run at any point in the release flow.
+    """
+    seen = set()
+    for path in DOC_FILES:
+        full = os.path.join(REPO_ROOT, path)
+        with open(full, "r", encoding="utf-8") as fh:
+            for m in any_url_pattern().finditer(fh.read()):
+                tag_v, file_v = m.group(1), m.group(2)
+                if tag_v != file_v:
+                    raise SystemExit(
+                        "%s: release URL is internally inconsistent "
+                        "(tag v%s, filename %s)" % (path, tag_v, file_v)
+                    )
+                seen.add(tag_v)
+    if not seen:
+        raise SystemExit(
+            "No release URL found in any doc file. Cannot derive the "
+            "current version automatically; check README.md and "
+            "docs/install.md."
+        )
+    if len(seen) > 1:
+        raise SystemExit(
+            "Doc release URLs disagree on the version: %s. Reconcile "
+            "them manually before bumping." % ", ".join(sorted(seen))
+        )
+    return seen.pop()
+
+
 def cmd_bump(args):
-    old = current_version()
     new = args.to
     if not VERSION_RE.match(new):
         raise SystemExit("--to: not a valid X.Y.Z version: %r" % new)
+    old = doc_release_version()
     if old == new:
-        print("Current version is already %s - nothing to do." % new)
+        print("Documentation already points at v%s - nothing to do." % new)
         return 0
 
     total = 0
@@ -178,12 +217,11 @@ def cmd_bump(args):
             )
             total += n_url + n_cb
         else:
-            print("%s: no matches (already at %s?)" % (path, new))
+            print("%s: no matches for v%s" % (path, old))
 
     if total == 0:
         print(
-            "No URL or current-build matches for v%s found. "
-            "Documentation may already point at v%s." % (old, new)
+            "No URL or current-build matches for v%s found." % old
         )
         return 0
     return 0

@@ -3,6 +3,35 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.4] - 2026-05-21
+
+### Added
+- `CONTROL/postrm` opkg maintainer script. Wipes the plugin
+  directory after `opkg remove` so leftover Python bytecode
+  (`__pycache__/*.pyc`) does not keep the enigma2 plugin browser
+  listing the plugin as a ghost entry without an icon. Earlier
+  releases required a one-time manual `rm -rf` after uninstall;
+  this happens automatically now.
+- `tools/bump_release_urls.py` for keeping the install URLs in
+  `README.md` and `docs/install.md` in sync with the released
+  version. Derives the "from" version from the docs themselves,
+  so the script can run at any point in the release flow.
+- `docs/install.md` notes the one-time manual cleanup users coming
+  from v0.3.3 or earlier need to run once.
+
+### Changed
+- `build.py` installs opkg maintainer scripts (`preinst`,
+  `postinst`, `prerm`, `postrm`) with mode `0755` in the control
+  archive; the `Makefile` build path copies the whole `CONTROL/`
+  tree and `chmod`s `postrm` so both build flows produce identical
+  IPKs.
+
+### Fixed
+- `README.md` and `docs/install.md` install snippets now point at
+  the actual current release tag and filename. The previous text
+  was pinned at `v0.3.0` (and `docs/install.md` even referenced a
+  stale `0.2.7` filename).
+
 ## [0.3.3] - 2026-05-21
 
 ### Added
