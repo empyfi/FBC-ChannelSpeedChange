@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.3] - 2026-05-21
+
+### Added
+- Autotools skeleton for the OpenEmbedded build path:
+  `configure.ac`, top-level `Makefile.am`, `po/Makefile.am`
+  and `autogen.sh`. After `./autogen.sh && ./configure &&
+  make && make install` the plugin lands under
+  `$(libdir)/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange`
+  and the compiled translation catalog under
+  `.../FBCChannelSpeedChange/locale/<lang>/LC_MESSAGES/`.
+- README section pointing distribution maintainers at the
+  autotools path; the existing `wget` + `opkg install` IPK
+  flow stays the primary supported install method for users
+  on a running box.
+
+### Changed
+- `.gitignore` covers autotools-generated artefacts
+  (`configure`, `Makefile.in`, `aclocal.m4`,
+  `autom4te.cache/`, `build-aux/`, `po/Makefile.in`,
+  `po/*.mo`).
+
 ## [0.3.2] - 2026-05-21
 
 ### Added

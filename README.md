@@ -141,6 +141,28 @@ After enigma2 restarts the plugin is on with sane defaults — all three
 pretune toggles (next / previous / last-watched) are enabled. Open
 **Menu → Plugins → FBC ChannelSpeedChange** to fine-tune.
 
+### Alternative: OpenEmbedded / autotools build
+
+The repository also ships an autotools skeleton
+(`configure.ac`, `Makefile.am`, `po/Makefile.am`, `autogen.sh`) so
+the plugin can be picked up by an OpenEmbedded recipe and built
+into the OpenATV feed directly. From a source checkout:
+
+```sh
+./autogen.sh
+./configure --prefix=/usr --libdir=/usr/lib
+make
+make DESTDIR=/path/to/staging install
+```
+
+This installs the Python sources under
+`$(libdir)/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange`
+and the compiled translation catalog at
+`.../FBCChannelSpeedChange/locale/<lang>/LC_MESSAGES/FBCChannelSpeedChange.mo`.
+The quick-install IPK path above (`build.py` → GitHub release →
+`opkg install`) remains the supported way to install on a running
+box; autotools is for distribution maintainers.
+
 ## Settings
 
 | Key | Default | Notes |
