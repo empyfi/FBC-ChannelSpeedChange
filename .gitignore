@@ -40,6 +40,7 @@ Thumbs.db
 # Local tooling scratch directories
 .cache/
 .scratch/
+/notes/
 
 # Local environment
 .env
