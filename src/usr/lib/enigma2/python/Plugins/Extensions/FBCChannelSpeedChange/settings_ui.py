@@ -11,10 +11,10 @@ class FBCChannelSpeedChangeSetup(ConfigListScreen, Screen):
     skin = """
     <screen name="FBCChannelSpeedChangeSetup" position="center,center" size="600,400" title="FBC ChannelSpeedChange">
         <widget name="config" position="10,10" size="580,340" scrollbarMode="showOnDemand"/>
-        <ePixmap pixmap="skin_default/buttons/red.png" position="10,360" size="140,40"/>
-        <ePixmap pixmap="skin_default/buttons/green.png" position="160,360" size="140,40"/>
-        <widget name="key_red" position="10,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" transparent="1"/>
-        <widget name="key_green" position="160,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" transparent="1"/>
+        <ePixmap pixmap="skin_default/buttons/red.png" position="10,360" size="140,40" alphatest="blend"/>
+        <ePixmap pixmap="skin_default/buttons/green.png" position="160,360" size="140,40" alphatest="blend"/>
+        <widget name="key_red" position="10,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" zPosition="1" transparent="1"/>
+        <widget name="key_green" position="160,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" zPosition="1" transparent="1"/>
     </screen>
     """
 

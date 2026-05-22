@@ -13,7 +13,7 @@ Recommended approach for end users.
 ssh root@<your-box-ip>
 
 # 1. Grab the latest IPK from GitHub
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.3.4/enigma2-plugin-extensions-fbc-channelspeedchange_0.3.4_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.3.5/enigma2-plugin-extensions-fbc-channelspeedchange_0.3.5_all.ipk -O /tmp/fbc.ipk
 
 # 2. Install
 opkg install /tmp/fbc.ipk

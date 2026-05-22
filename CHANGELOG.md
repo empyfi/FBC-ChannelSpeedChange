@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.5] - 2026-05-22
+
+### Changed
+- Settings-screen skin XML in `settings_ui.py` gains
+  `alphatest="blend"` on the red/green button pixmaps and
+  `zPosition="1"` on the `key_red` / `key_green` label widgets.
+  The pixmap edges now compose properly against any skin
+  background, and the labels are guaranteed to render above the
+  button graphic regardless of the skin's layer-sort behaviour.
+
 ## [0.3.4] - 2026-05-21
 
 ### Added
