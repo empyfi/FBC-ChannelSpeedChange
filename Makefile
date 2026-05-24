@@ -1,5 +1,5 @@
 PACKAGE  := enigma2-plugin-extensions-fbc-channelspeedchange
-VERSION  := 0.3.5
+VERSION  := 0.3.6
 ARCH     := all
 IPK      := $(PACKAGE)_$(VERSION)_$(ARCH).ipk
 

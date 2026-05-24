@@ -83,18 +83,20 @@ def _make_tar_gz(out_path, src_root, arcname_prefix=""):
 def _make_ar(out_path, members):
     """Write a System V / BSD compatible ar archive.
 
-    members: list of (name, bytes). Names <= 16 chars (no special handling
-    needed for the three IPK members: debian-binary, control.tar.gz,
-    data.tar.gz).
+    members: list of (name, bytes). Names <= 15 chars - one byte is
+    reserved for the GNU-style trailing slash that terminates the name
+    inside the 16-byte name field. Both opkg and dpkg accept the slash;
+    7zip uses it to distinguish a plain ar archive from a dpkg .deb
+    payload-only view, so emitting the slash keeps every tool happy.
     """
     now = int(time.time())
     with open(out_path, "wb") as fh:
         fh.write(b"!<arch>\n")
         for name, data in members:
-            if len(name) > 16:
+            if len(name) > 15:
                 raise ValueError("ar member name too long: %s" % name)
             header = (
-                name.ljust(16).encode("ascii") +
+                (name + "/").ljust(16).encode("ascii") +
                 str(now).ljust(12).encode("ascii") +
                 b"0     " +
                 b"0     " +

@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.6] - 2026-05-24
+
+### Fixed
+- `build.py` now terminates ar member names with the GNU-style
+  trailing slash (`debian-binary/`, `control.tar.gz/`,
+  `data.tar.gz/`) inside the 16-byte name field. Both opkg and
+  dpkg accept the slash either way, but 7zip uses the slash to
+  distinguish a plain ar archive from a Debian-style payload-only
+  view; without the slash 7zip's `deb` subtype handler showed only
+  `data.tar.gz` and silently hid `debian-binary` and `control.tar.gz`,
+  giving the impression that the IPK had no control file. With the
+  slash 7zip reports `SubType = ar` and lists all three members.
+
+  Functional behaviour on the receiver is unchanged - opkg parses
+  both forms identically. The `Makefile` build path (system `ar -r`,
+  GNU tooling) already wrote the slashed form, so this was only a
+  defect in the pure-Python builder.
+
 ## [0.3.5] - 2026-05-22
 
 ### Changed
