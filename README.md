@@ -125,10 +125,23 @@ python3 /tmp/zap_stats.py
 
 ## Install
 
-See [`docs/install.md`](docs/install.md) for the SSH-based install
-procedure.
+The plugin is in the official OpenATV feed. The standard
+install path is the plugin browser on the receiver:
 
-Quick version:
+**Menu → Plugins** → green button (Download plugins) →
+**Extensions** → `enigma2-plugin-extensions-fbc-channelspeedchange`
+→ OK → restart enigma2 when prompted.
+
+After the restart, open **Menu → Plugins → FBC ChannelSpeedChange**
+to fine-tune. All three pretune toggles (next / previous /
+last-watched) are enabled by default.
+
+### Get the latest release directly
+
+The feed mirror updates on a maintainer cadence and lags the
+GitHub release by a few days. To install the freshest tagged
+release immediately (typically because a bug fix you care about
+just landed):
 
 ```sh
 ssh root@<your-box>
@@ -137,9 +150,8 @@ opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
 
-After enigma2 restarts the plugin is on with sane defaults — all three
-pretune toggles (next / previous / last-watched) are enabled. Open
-**Menu → Plugins → FBC ChannelSpeedChange** to fine-tune.
+`docs/install.md` covers both paths, plus verification,
+troubleshooting and uninstall.
 
 ### Alternative: OpenEmbedded / autotools build
 

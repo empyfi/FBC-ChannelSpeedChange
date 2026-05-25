@@ -4,10 +4,34 @@ Tested target: **GigaBlue UHD Quad 4K Pro on OpenATV 7.6.0**.
 Should also work on any other FBC-equipped OpenATV box running
 Python 3 (untested — feedback welcome).
 
-## Standard install (from GitHub release)
+## Standard install (OpenATV plugin browser)
+
+Recommended path for most users. The plugin is in the official
+OpenATV feed, so the receiver's built-in plugin manager picks it
+up automatically once `opkg update` has run.
+
+1. **Menu → Plugins** on the receiver.
+2. Press the **green** button to open Download plugins (label
+   wording differs slightly between skins — sometimes "Add new
+   plugin").
+3. Navigate to **Extensions**.
+4. Pick `enigma2-plugin-extensions-fbc-channelspeedchange` and
+   press OK.
+5. Confirm the enigma2 restart when prompted.
+
+After the restart the plugin runs with sane defaults:
+`pretune_next`, `pretune_prev` and `pretune_history` all `yes`,
+master switches `allow_pretune` and `use_real_pretune` both `yes`.
+You should see the channel list mark the three pretuned services
+in red within a couple of seconds of the first manual zap.
+
+## Install the latest release directly (from GitHub)
+
+The OpenATV feed mirror updates on a maintainer cadence and lags
+the GitHub release by a few days. If a bug fix you need just
+landed and is not yet in the feed, fetch the IPK directly.
 
 The receiver needs internet access; everything else happens via SSH.
-Recommended approach for end users.
 
 ```sh
 ssh root@<your-box-ip>
@@ -22,11 +46,11 @@ opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
 
-After the restart the plugin runs with sane defaults:
-`pretune_next`, `pretune_prev` and `pretune_history` all `yes`,
-master switches `allow_pretune` and `use_real_pretune` both `yes`.
-You should see the channel list mark the three pretuned services
-in red within a couple of seconds of the first manual zap.
+This drops the plugin into the same `/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/`
+location as the feed install. Subsequent `opkg update` runs will
+not roll the plugin back to an older feed version (opkg sees the
+locally-installed version is newer); once the feed catches up, the
+two versions converge.
 
 ## Verification
 
