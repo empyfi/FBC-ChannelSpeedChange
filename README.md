@@ -48,6 +48,12 @@ hardware.
   `use_real_pretune` for the prepare()+start() path
 - Crash watchdog: self-disable after three consecutive failures
   with a one-shot user notification
+- Startup sanity check: verifies the required enigma2 interfaces
+  (`InfoBar.zapUp`/`zapDown`/`servicelist`,
+  `NavigationInstance.recordService`/`playService`) before hooking
+  anything; refuses to start with a clear notification on an
+  incompatible build instead of failing at the first zap, and logs
+  a degraded-mode warning when an optional interface is missing
 - Preserves `servicelist.history` and the channel-list cursor
   on every HIT (so the standard history navigation, the
   history selector dialog, and the channel-list cursor all
@@ -60,7 +66,7 @@ hardware.
   `fallocate(PUNCH_HOLE | KEEP_SIZE)` so the throwaway pre-tune
   `.ts` files do not balloon RAM
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (29 tests at the time of writing)
+  unit-tested off-box (42 tests at the time of writing)
 
 ## Measured performance
 

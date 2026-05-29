@@ -72,6 +72,12 @@ In a healthy install the log shows lines like:
 [info] ZAP_TIMING attr=zapDown result=HIT delta_ms=122.4
 ```
 
+The log is size-capped at 256 KB and rotates: once it fills, the
+current file becomes `fbc_csc.log.1`, the previous `.1` becomes
+`.2`, and so on up to `.3` (oldest dropped). When reporting a bug,
+attach all of `fbc_csc.log` plus any `fbc_csc.log.1` … `.3` so the
+minutes leading up to the problem are included.
+
 After a few zaps you can also run:
 
 ```sh
@@ -164,6 +170,32 @@ Look at the bottom of `/tmp/fbc_csc.log` for the watchdog
 message and the preceding errors. Three consecutive zap failures
 in a row cause the controller to self-disable as a safety
 measure. Restart enigma2 (`init 4 && init 3`) to re-enable.
+
+### Popup: "missing required interfaces", plugin stays off
+
+At startup the plugin runs a sanity check before hooking anything:
+it confirms the enigma2 interfaces it depends on are present
+(`InfoBar.zapUp` / `zapDown` / `servicelist`,
+`NavigationInstance.recordService` / `playService`). If a critical
+interface is missing it refuses to start, shows this popup, and
+logs a line such as:
+
+```
+[error] sanity check failed; not starting. Missing: InfoBar.servicelist
+```
+
+This is deliberate — the plugin stays fully off rather than failing
+half-way through the first zap. It almost always means the receiver
+is running an enigma2 build the plugin has not been adapted to (a
+non-OpenATV image, or an OpenATV release that renamed/removed an
+interface). Nothing is wrapped and no tuner is touched, so the box
+behaves exactly as without the plugin. Please open a bug with the
+`sanity check failed` line and your image / OpenATV version.
+
+Missing *optional* interfaces do not stop the plugin; they log a
+`sanity (degraded)` warning naming the feature that is unavailable
+(for example history-zap interception) while everything else keeps
+working.
 
 ### `/tmp` filling up
 
