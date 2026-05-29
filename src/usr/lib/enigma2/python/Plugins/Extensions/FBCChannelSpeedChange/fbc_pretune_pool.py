@@ -71,6 +71,30 @@ class FBCPreTunePool:
 
     # --- public API -----------------------------------------------------
 
+    def sanity_check(self):
+        """Inspect the NavigationInstance surface the pool depends on.
+
+        Returns (critical, optional). A NavigationInstance that exists
+        but lacks recordService is a genuine API incompatibility
+        (critical). A NavigationInstance that is None is treated as
+        optional - it is usually just not ready yet at session start
+        and the allocate path already tolerates it. A missing NIM
+        manager only costs FBC enumeration, so it is optional too.
+        """
+        critical = []
+        optional = []
+        nav = self._nav_provider()
+        if nav is None:
+            optional.append("NavigationInstance (not ready yet)")
+        else:
+            if not hasattr(nav, "recordService"):
+                critical.append("NavigationInstance.recordService")
+            if not hasattr(nav, "playService"):
+                critical.append("NavigationInstance.playService")
+        if self._nim_provider() is None:
+            optional.append("NimManager (FBC enumeration unavailable)")
+        return (critical, optional)
+
     def configure(self, capacity_by_role):
         with self._lock:
             for role, want in capacity_by_role.items():

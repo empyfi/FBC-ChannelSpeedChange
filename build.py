@@ -48,7 +48,12 @@ def _make_tar_gz(out_path, src_root, arcname_prefix=""):
     target box regardless of who built it.
     """
     with tarfile.open(out_path, "w:gz", format=tarfile.USTAR_FORMAT) as tar:
-        for dirpath, _dirnames, filenames in os.walk(src_root):
+        for dirpath, dirnames, filenames in os.walk(src_root):
+            # Python bytecode caches are host-specific (the dev host's
+            # interpreter version) and must not ship; enigma2 compiles
+            # its own on first import. Prune them from the walk so
+            # neither the directory entry nor the .pyc files are packed.
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
             # Always emit a directory entry so empty dirs survive.
             rel_dir = os.path.relpath(dirpath, src_root)
             if rel_dir == ".":
@@ -63,6 +68,8 @@ def _make_tar_gz(out_path, src_root, arcname_prefix=""):
                 info.mtime = int(time.time())
                 tar.addfile(info)
             for fname in sorted(filenames):
+                if fname.endswith((".pyc", ".pyo")):
+                    continue
                 full = os.path.join(dirpath, fname)
                 rel = os.path.relpath(full, src_root)
                 arc = os.path.join(arcname_prefix, rel).replace("\\", "/")

@@ -15,7 +15,7 @@ from .config import cfg
 from .fbc_pretune_pool import FBCPreTunePool, Role
 from .predictor import Predictor
 from .resource_arbiter import ResourceArbiter
-from .zap_interceptor import ZapInterceptor
+from .zap_interceptor import ZapInterceptor, sanity_check_infobar
 
 
 class Controller:
@@ -66,6 +66,17 @@ class Controller:
                 diagnostic.run_once()
             except Exception as exc:
                 error("diagnostic.run_once: %r" % exc)
+            # Sanity-check the enigma2 surface before committing. Pool
+            # and arbiter are checked now; the interceptor is checked
+            # once the InfoBar is available (direct or deferred path).
+            pool_crit, pool_opt = self._pool.sanity_check()
+            arb_crit, arb_opt = self._arbiter.sanity_check()
+            for w in pool_opt + arb_opt:
+                warn("sanity (degraded): %s" % w)
+            if pool_crit + arb_crit:
+                self._sanity_refuse(pool_crit + arb_crit)
+                return
+
             self._apply_pool_capacity()
             self._arbiter.start()
             infobar = self._find_infobar()
@@ -73,7 +84,8 @@ class Controller:
                 warn("InfoBar not ready yet; deferring interceptor start")
                 self._defer_interceptor_start()
             else:
-                self._interceptor.start(infobar)
+                if not self._apply_interceptor(infobar):
+                    return
             self._enabled = True
             self._schedule_rearm(delay_ms=500)
             info("controller started (next=%s prev=%s last=%s)" % (
@@ -164,6 +176,40 @@ class Controller:
             error("_do_rearm: %r" % exc)
             self._record_failure()
 
+    # --- sanity ---------------------------------------------------------
+
+    def _apply_interceptor(self, infobar):
+        """Sanity-check the InfoBar surface, then start the interceptor.
+
+        Returns True if the interceptor is now active; False means a
+        critical interface is missing and the plugin has been stopped.
+        """
+        crit, opt = sanity_check_infobar(infobar)
+        for w in opt:
+            warn("sanity (degraded): %s" % w)
+        if crit:
+            self._sanity_refuse(crit)
+            return False
+        self._interceptor.start(infobar)
+        return True
+
+    def _sanity_refuse(self, missing):
+        error("sanity check failed; not starting. Missing: %s"
+              % ", ".join(missing))
+        self.stop()
+        try:
+            from Tools.Notifications import AddPopup
+            from Screens.MessageBox import MessageBox
+            AddPopup(
+                _("FBC-ChannelSpeedChange could not start: this enigma2 "
+                  "build is missing required interfaces (%s). The plugin "
+                  "stays off.") % ", ".join(missing),
+                MessageBox.TYPE_WARNING, 10,
+                id="FBC_CSC_SANITY_FAILED",
+            )
+        except Exception:
+            pass
+
     # --- watchdog -------------------------------------------------------
 
     def _record_failure(self):
@@ -208,7 +254,7 @@ class Controller:
                     return  # try again on next tick
                 self._defer_timer.stop()
                 try:
-                    self._interceptor.start(ib)
+                    self._apply_interceptor(ib)
                 except Exception as exc:
                     error("deferred interceptor.start: %r" % exc)
 

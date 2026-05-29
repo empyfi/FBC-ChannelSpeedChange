@@ -3,6 +3,35 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.7] - 2026-05-24
+
+### Added
+- Startup sanity check across the interceptor, pool and arbiter.
+  Before wrapping anything, the plugin verifies the critical enigma2
+  surface it depends on (`InfoBar.zapUp` / `zapDown` / `servicelist`,
+  `NavigationInstance.recordService` / `playService`). A missing
+  critical interface now makes the plugin refuse to start with a
+  clear log line and a one-shot popup, instead of failing piecemeal
+  at the first zap. Missing optional interfaces (`historyBack` /
+  `historyNext`, `servicelist.setCurrentSelection`, the
+  `RecordTimer.on_state_change` signal) log a degraded-mode warning
+  and the plugin keeps running.
+
+### Changed
+- `logger.py` rotates the log instead of deleting it. When
+  `fbc_csc.log` passes 256 KB it shifts to `fbc_csc.log.1` …
+  `fbc_csc.log.3` (oldest dropped) so the minutes leading up to a
+  recent crash stay readable for post-mortems. Previously the log
+  was wiped wholesale on overflow.
+
+### Fixed
+- The IPK no longer ships `__pycache__/*.pyc` bytecode. Both build
+  paths (`build.py` and the `Makefile`) now prune `__pycache__`
+  and `*.py[co]` before packaging, so host-specific compiled
+  bytecode (built for the dev host's Python version) cannot leak
+  into the package; enigma2 compiles its own on first import. This
+  also shrinks the IPK noticeably.
+
 ## [0.3.6] - 2026-05-24
 
 ### Fixed

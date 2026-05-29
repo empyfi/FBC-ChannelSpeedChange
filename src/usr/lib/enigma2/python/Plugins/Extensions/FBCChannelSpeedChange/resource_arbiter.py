@@ -46,6 +46,31 @@ class ResourceArbiter:
         self._pip_conn = None
         info("arbiter stopped")
 
+    def sanity_check(self):
+        """Inspect the recording/PiP surface the arbiter depends on.
+
+        Returns (critical, optional). The arbiter has no critical
+        dependencies: a missing RecordTimer just disables recording
+        arbitration, and a missing on_state_change signal falls back
+        to periodic polling. Both are reported as optional so the
+        operator sees the degraded mode in the log without the plugin
+        refusing to start.
+
+        The session is intentionally NOT checked here. It is resolved
+        lazily from InfoBar.instance.session on every PiP poll, and at
+        session-start time the InfoBar is usually not ready yet, so a
+        check here would report a misleading "disabled" on every boot
+        while PiP arbitration in fact starts working as soon as the
+        InfoBar appears.
+        """
+        optional = []
+        rt = self._record_timer_provider()
+        if rt is None:
+            optional.append("RecordTimer (recording arbitration disabled)")
+        elif getattr(rt, "on_state_change", None) is None:
+            optional.append("RecordTimer.on_state_change (using 2s poll fallback)")
+        return ([], optional)
+
     # --- recording ------------------------------------------------------
 
     def _wire_record_timer(self):

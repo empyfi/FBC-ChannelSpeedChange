@@ -49,6 +49,41 @@ def _ensure_csv_header():
 _WRAPPED_ATTR = "_fbc_csc_wrapped"
 
 
+def sanity_check_infobar(infobar):
+    """Inspect the InfoBar surface the interceptor depends on.
+
+    Returns (critical, optional): lists of human-readable names of
+    missing interfaces. A critical entry means the fast-bypass cannot
+    function at all and the plugin should refuse to start; an optional
+    entry means one feature degrades but the rest still works. The
+    critical set is deliberately minimal - zapUp/zapDown and the
+    servicelist are present on every standard InfoBar, so a false
+    positive that refuses a working build is unlikely.
+    """
+    critical = []
+    optional = []
+    if infobar is None:
+        return (["InfoBar instance"], [])
+    for attr in ("zapUp", "zapDown"):
+        if not hasattr(infobar, attr):
+            critical.append("InfoBar.%s" % attr)
+    sl = getattr(infobar, "servicelist", None)
+    if sl is None:
+        critical.append("InfoBar.servicelist")
+    else:
+        if not hasattr(sl, "history"):
+            optional.append("servicelist.history (history pre-tune degrades)")
+        if not hasattr(sl, "setCurrentSelection"):
+            optional.append("servicelist.setCurrentSelection (channel-list cursor may drift)")
+        history = getattr(sl, "history", None)
+        if not hasattr(sl, "addToHistory") and not hasattr(history, "append"):
+            optional.append("history mutation API (history list may drift)")
+    for attr in ("historyBack", "historyNext"):
+        if not hasattr(infobar, attr):
+            optional.append("InfoBar.%s (history zap not intercepted)" % attr)
+    return (critical, optional)
+
+
 class ZapInterceptor:
     def __init__(self, pool, predictor, on_zap=None):
         self._pool = pool
