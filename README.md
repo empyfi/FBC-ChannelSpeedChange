@@ -7,6 +7,24 @@ with FBC (Full Band Capture) tuners. Designed and field-tested on the
 0.7–1.5 s for the same cross-transponder zaps without the plugin. PiP
 and Recording always retain priority on the FBC demodulator pool.
 
+## Upgrading from v0.3.7?
+
+Pay-TV channels (HD+, Sky, …) now show a brief black frame
+(~400 ms) on HIT zaps. **This is intentional, not a bug** — the
+descrambler is no longer pre-engaged during pre-tune, so the
+plugin stays out of the way of cardsharing setups, single-decode
+CAMs and CI+ modules. Free-to-air channels are unaffected.
+
+To restore v0.3.7-style fast pay-TV zaps — only safe with a
+multi-decode capable card AND no cardsharing concern — enable
+one or more of the **Pre-warm pay-TV descrambler** toggles in
+the plugin settings. The HISTORY toggle is the recommended
+opt-in: it adds a single slowly-rotating decoder session and
+typically stays below cardsharing anti-share thresholds, while
+the NEXT / PREVIOUS toggles re-arm on every zap and generate a
+much higher ECM burst. Full trade-off in the **Pay-TV channels**
+section below.
+
 ## Why another zap accelerator?
 
 The two existing options on OpenATV both have gaps for the
