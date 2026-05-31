@@ -5,7 +5,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: FBCChannelSpeedChange 0.3.2\n"
+"Project-Id-Version: FBCChannelSpeedChange 0.4.0\n"
 "Report-Msgid-Bugs-To: https://github.com/empyfi/FBC-ChannelSpeedChange/issues\n"
 "POT-Creation-Date: 2026-05-21 12:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -43,6 +43,18 @@ msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
 msgid "Pre-tune LAST channel (history)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-warm pay-TV descrambler: LAST"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-warm pay-TV descrambler: NEXT"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+msgid "Pre-warm pay-TV descrambler: PREVIOUS"
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py

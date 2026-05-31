@@ -31,19 +31,71 @@ def _emit_csv(row):
         pass
 
 
+_CSV_HEADER = "epoch,attr,result,delta_ms,target_ref\n"
+_CSV_HEADER_LEGACY = "epoch,attr,result,delta_ms\n"
+
+
 def _ensure_csv_header():
-    """Create the CSV with a header row if it does not exist yet.
-    Existing rows are left in place so multiple sessions of timing
-    data can be collected and averaged.
+    """Create the CSV with the current 5-column header if missing, or
+    migrate an existing CSV from the legacy 4-column format in place.
+
+    A legacy CSV (from a pre-0.4.0 install) carries
+    `epoch,attr,result,delta_ms` and 4-column rows. On the first call
+    after upgrade the header is rewritten to the new shape and any
+    4-column row is padded with an empty target_ref so off-box
+    analysis tools see a single consistent column count throughout
+    the file. Idempotent: a CSV already on the new shape is left
+    untouched.
     """
     import os
-    if os.path.exists(_TIMING_CSV):
+    if not os.path.exists(_TIMING_CSV):
+        try:
+            with open(_TIMING_CSV, "w") as fh:
+                fh.write(_CSV_HEADER)
+        except OSError:
+            pass
+        return
+    try:
+        with open(_TIMING_CSV, "r") as fh:
+            first = fh.readline()
+            rest = fh.readlines()
+    except OSError:
+        return
+    if first.rstrip("\n") != _CSV_HEADER_LEGACY.rstrip("\n"):
+        # Already migrated, or an unrecognised hand-edited header -
+        # in either case leave the file alone.
         return
     try:
         with open(_TIMING_CSV, "w") as fh:
-            fh.write("epoch,attr,result,delta_ms\n")
+            fh.write(_CSV_HEADER)
+            for line in rest:
+                stripped = line.rstrip("\n")
+                if stripped and stripped.count(",") == 3:
+                    # 4-column legacy row: pad with empty target_ref.
+                    fh.write(stripped + ",\n")
+                else:
+                    fh.write(line)
     except OSError:
         pass
+
+
+def _current_service_ref():
+    """Best-effort query of the currently-playing service reference.
+    Empty string if NavigationInstance is not ready or the reference
+    cannot be stringified. Wrapped so a missing reference never breaks
+    the timing record path.
+    """
+    try:
+        import NavigationInstance
+        nav = NavigationInstance.instance
+        if nav is None:
+            return ""
+        ref = nav.getCurrentlyPlayingServiceReference()
+        if ref is None:
+            return ""
+        return ref.toString()
+    except Exception:
+        return ""
 
 
 _WRAPPED_ATTR = "_fbc_csc_wrapped"
@@ -341,11 +393,18 @@ class ZapInterceptor:
                 hit_str = "EXT"
             else:
                 hit_str = "HIT" if hit else ("MISS" if hit is False else "?")
+            # Query the currently-playing service reference at this
+            # point - evTunedIn has fired, the service is locked at
+            # demux level. Capturing the ref per row lets off-box
+            # analysis classify FTA vs scrambled by cross-referencing
+            # lamedb5 without needing a live debug session.
+            target_ref = _current_service_ref()
             # ZAP_TIMING stays at info level - this is the headline
             # data in the log, available without enabling verbose
             # debug.
-            info("ZAP_TIMING attr=%s result=%s delta_ms=%.1f" % (attr, hit_str, delta_ms))
-            _emit_csv([int(time.time()), attr, hit_str, "%.1f" % delta_ms])
+            info("ZAP_TIMING attr=%s result=%s delta_ms=%.1f ref=%s" % (
+                attr, hit_str, delta_ms, target_ref))
+            _emit_csv([int(time.time()), attr, hit_str, "%.1f" % delta_ms, target_ref])
             self._maybe_show_osd(attr, hit_str, delta_ms)
         except Exception as exc:
             error("_record_zap_timing: %r" % exc)

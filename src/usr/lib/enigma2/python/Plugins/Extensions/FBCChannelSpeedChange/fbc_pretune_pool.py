@@ -279,10 +279,45 @@ class FBCPreTunePool:
             slot.service_ref = None
             slot.state = SlotState.IDLE
 
+    def _direction_descramble(self, role):
+        """Per-direction descramble flag for the pre-tune prepare() call.
+
+        Reads cfg.prewarm_descrambler_{history,next,prev} (all default
+        False). Returns False on any lookup error so a corrupted
+        config never accidentally engages the descrambler.
+        """
+        try:
+            if role is Role.HISTORY:
+                return bool(_cfg.prewarm_descrambler_history.value)
+            if role is Role.NEXT:
+                return bool(_cfg.prewarm_descrambler_next.value)
+            if role is Role.PREV:
+                return bool(_cfg.prewarm_descrambler_prev.value)
+        except Exception:
+            pass
+        return False
+
     def _kick_real_tune(self, slot, rec):
         """Call prepare(tmpfile, ...) + start() so the demod is actually
         tuned to the transponder. Gated on cfg.use_real_pretune; required
         for the pre-tune to give a measurable speedup vs plain playService.
+
+        Uses the canonical 9-arg iRecordableService.prepare signature
+        verified against openatv/enigma2 branch 7.6
+        lib/python/RecordTimer.py:
+            prepare(filename, begin, end, eit_event_id,
+                    name, description, tags,
+                    descramble, record_ecm)
+
+        The descramble flag is taken per-direction from
+        cfg.prewarm_descrambler_{history,next,prev}, all default off.
+        With descramble=False the recordable locks the transponder
+        without engaging the CA path - no parallel-decode load on the
+        card / softcam / CAM. Channel-sharing at swap-in still re-uses
+        the locked tuner; the descrambler initialises on the live
+        consumer. Trades ~400 ms first-clear-frame on scrambled HIT
+        zaps (one ECM round-trip) for universal safety regardless of
+        the user's decryption stack.
         """
         import time
         import os
@@ -291,9 +326,11 @@ class FBCPreTunePool:
         # be unlinked yet when prepare() opens the new one.
         tmp = "/tmp/fbc_csc_pretune_%s_%d.ts" % (slot.role.value, int(time.time() * 1000))
         slot._tmp_file = tmp
+        descramble = self._direction_descramble(slot.role)
         try:
-            err = rec.prepare(tmp, 0, 0, 0)
-            debug("pretune prepare role=%s file=%s err=%r" % (slot.role.value, tmp, err))
+            err = rec.prepare(tmp, 0, 0, 0, "", "", "", descramble, False)
+            debug("pretune prepare role=%s descramble=%s file=%s err=%r" % (
+                slot.role.value, descramble, tmp, err))
             if err:
                 # Non-zero means prepare refused; release the slot rather
                 # than leaving a half-allocated recordable around.

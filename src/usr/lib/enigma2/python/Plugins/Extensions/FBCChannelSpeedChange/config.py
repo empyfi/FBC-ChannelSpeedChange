@@ -35,6 +35,26 @@ def _initialize():
     cfg.release_for_recording = ConfigYesNo(default=True)
     cfg.release_for_pip = ConfigYesNo(default=True)
 
+    # Per-direction "engage the descrambler during pre-tune" toggles.
+    # Default off: the pool calls prepare() with descramble=False, so
+    # the CA descrambler / softcam / cardsharing / CI+ CAM path never
+    # engages while a scrambled neighbour is held in the pool. The
+    # transponder is still locked, channel-sharing still works at
+    # swap-in; what changes is that the descrambler initialises after
+    # the swap rather than ahead of it, adding ~400 ms (one ECM
+    # round-trip) as a visible black frame on pay-TV HIT zaps.
+    #
+    # Enable per direction to opt back into the pre-warmed path:
+    #   - HISTORY: one extra continuous decoder session, slow rotation
+    #     (only re-arms when the live channel changes). Lowest impact
+    #     - typically the safe opt-in if any decoder budget exists.
+    #   - NEXT / PREV: extra sessions that re-arm on every zap. High
+    #     ECM-burst profile; recommended only for users with a
+    #     verified multi-decode card AND no cardsharing concern.
+    cfg.prewarm_descrambler_history = ConfigYesNo(default=False)
+    cfg.prewarm_descrambler_next = ConfigYesNo(default=False)
+    cfg.prewarm_descrambler_prev = ConfigYesNo(default=False)
+
     # Tiny on-screen overlay after every zap, showing the measured
     # latency in ms with a colour cue (green / yellow / orange / red).
     # Off by default to avoid extra widgets stacked on top of the

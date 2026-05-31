@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: FBCChannelSpeedChange 0.3.2\n"
+"Project-Id-Version: FBCChannelSpeedChange 0.4.0\n"
 "Report-Msgid-Bugs-To: https://github.com/empyfi/FBC-ChannelSpeedChange/issues\n"
 "POT-Creation-Date: 2026-05-21 12:00+0000\n"
 "PO-Revision-Date: 2026-05-21 12:00+0000\n"
@@ -39,6 +39,15 @@ msgstr "Vorherigen Sender vorhalten"
 
 msgid "Pre-tune LAST channel (history)"
 msgstr "Zuletzt gesehenen Sender vorhalten"
+
+msgid "Pre-warm pay-TV descrambler: LAST"
+msgstr "Pay-TV-Descrambler vorwärmen: ZULETZT"
+
+msgid "Pre-warm pay-TV descrambler: NEXT"
+msgstr "Pay-TV-Descrambler vorwärmen: NÄCHSTER"
+
+msgid "Pre-warm pay-TV descrambler: PREVIOUS"
+msgstr "Pay-TV-Descrambler vorwärmen: VORHERIGER"
 
 msgid "Release demods when recording starts"
 msgstr "Tuner freigeben bei Aufnahmestart"

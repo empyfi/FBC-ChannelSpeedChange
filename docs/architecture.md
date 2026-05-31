@@ -16,6 +16,12 @@ modifying the plugin. For end-user behaviour see
    two-tier opt-in (`cfg.enabled` + `cfg.allow_pretune`), and a
    watchdog auto-disables the plugin after three consecutive
    failures.
+4. Co-exist safely with any decryption stack — pre-tune locks
+   the transponder but the CA descrambler stays disengaged by
+   default, so cardsharing accounts, single-decode CAMs and
+   CI+ modules see no parallel load above the live consumer's
+   baseline. Per-direction opt-in flags let users with extra
+   decoder capacity reclaim the full HD+ HIT speedup.
 
 ## Module map
 
@@ -91,6 +97,94 @@ try/except cannot catch. A real `/tmp/fbc_csc_pretune_<role>_
 switch additionally ensures any future crash-class regression
 cannot self-replicate across reboots via persisted config.
 
+The pool calls the canonical 9-argument signature
+
+```
+prepare(filename, begin, end, eit_event_id,
+        name, description, tags, descramble, record_ecm)
+```
+
+verified against `openatv/enigma2` branch `7.6`
+`lib/python/RecordTimer.py` line 1547 (`RecordTimerEntry.prepare`).
+`begin`, `end`, `eit_event_id` are zero; `name`, `description`,
+`tags` are empty strings; `record_ecm` is `False`. The `descramble`
+argument is the per-direction flag described in the next section.
+
+## Descrambler behaviour and pay-TV channels
+
+For free-to-air services the descrambler is irrelevant: there is
+no scrambled stream to decode and `descramble` is a no-op. For
+scrambled services (HD+, Sky, ORF, BISS-coded feeds, …) the
+default `descramble=False` keeps the CA path completely quiet
+while the slot is in TUNING / LOCKED. Empirical consequence on an
+OSCam-dvbapi setup with three pretune slots armed against
+scrambled neighbours: no extra OSCam clients, no extra ECM
+traffic, no card load above the live consumer's baseline.
+
+At swap-in (`pool.swap_in` -> `nav.playService(ref)` for
+zapUp/zapDown, or the standard zap path for historyBack/
+historyNext/EXT) the live consumer attaches to the recordable's
+locked channel via `eDVBResourceManager` channel-sharing. The
+descrambler initialises **on the live consumer** at that moment,
+exactly as it would for a cold zap to a scrambled service. The
+tuner-lock saving is preserved; the ~400 ms one-ECM-round-trip
+descrambler-init cost is not. User-visible effect: a brief black
+frame on a scrambled HIT between the moment the tuner lock
+completes and the moment the first descrambled frame reaches the
+decoder.
+
+### Per-direction opt-in to v0.3.7-style pre-warm behaviour
+
+Three independent config flags reverse the default for the
+matching role:
+
+* `cfg.prewarm_descrambler_history` (default off)
+* `cfg.prewarm_descrambler_next`    (default off)
+* `cfg.prewarm_descrambler_prev`    (default off)
+
+`_kick_real_tune` reads the flag for `slot.role` via
+`_direction_descramble()` and passes it as the 8th positional to
+`prepare()`. When True for a given role, the pretune for that
+role engages the descrambler immediately; an OSCam dvbapi client
+appears for the service, ECMs flow, and the swap-in shows no
+black frame (the descrambler is already streaming control words).
+The cost is parallel CA load during arm cycles: one extra
+continuous decoder session per HISTORY slot, plus one extra
+session per NEXT/PREV slot that re-arms on every zap. Anti-share
+heuristics on cardsharing accounts read those bursts as
+suspicious traffic, single-decode CAMs see contention with live,
+and CI+ modules with limited parallel-decode capacity may drop
+the live channel to black.
+
+The per-direction split is deliberate: HISTORY pre-tunes a single
+slowly-rotating service, while NEXT/PREV walk the bouquet at zap
+speed. A user with verified extra-decoder capacity but
+cardsharing concerns can enable HISTORY only — that single
+continuous decode is typically below anti-share thresholds while
+NEXT/PREV's per-zap rotation is not.
+
+### OSCam dvbapi handshake after enigma2 restart
+
+Observed on OSCam-smod rsvn11726 with a minimal `oscam.conf`
+`[dvbapi]` section (pmt_mode=6, request_mode=1): after enigma2
+restarts (e.g. from `init 4 && init 3`, or an opkg install of a
+new plugin version), the dvbapi socket between enigma2 and OSCam
+can desynchronise. The OSCam log fills with `Error: network
+packet malformed! (no start)` and `Unknown socket command
+received: 0x...`. ECMs stop flowing, the live pay-TV picture goes
+black, and the OSCam status page shows the reader as CARDOK and
+the dvbapi client as OK while `total_ecm_min` stays at zero.
+
+Restarting the softcam manager once
+(`/etc/init.d/softcam stop && /etc/init.d/softcam start`)
+clears the state and dvbapi reconnects cleanly. The plugin does
+not touch the softcam directly; this is a known OSCam-side
+state-confusion mode that is independent of the plugin and would
+reproduce after any enigma2 restart on the affected configs.
+Worth documenting alongside the v0.4.0 release notes so users
+who only see the black picture do not blame the new plugin
+version.
+
 ## Two-tier safety opt-in
 
 `cfg.enabled` (default True) — gates the whole controller. Off
@@ -110,6 +204,11 @@ mode that produces no measurable speedup).
 
 `cfg.pretune_{next,prev,history}` (default yes/yes/yes) — yes/no
 toggles for each role.
+
+`cfg.prewarm_descrambler_{history,next,prev}` (default off/off/off) —
+per-direction opt-in to the v0.3.7-style pre-warmed descrambler
+path. See "Descrambler behaviour and pay-TV channels" for the
+trade-off and the recommended HISTORY-only configuration.
 
 ## Fast-path vs pass-through
 
@@ -232,11 +331,29 @@ zap.
 ## Timing CSV
 
 Every zap appends one row to `/tmp/fbc_csc_timing.csv` with
-columns `epoch,attr,result,delta_ms`. The CSV survives plugin
-restarts (header only written if missing) so multiple sessions
-of timing data can be collected and averaged. `tools/zap_stats.py`
+columns `epoch,attr,result,delta_ms,target_ref`. `target_ref`
+holds the currently-playing service reference at `evTunedIn` so
+off-box analysis can classify FTA vs scrambled by cross-
+referencing `/etc/enigma2/lamedb5` without needing a live debug
+session. The CSV survives plugin restarts so multiple sessions
+can be collected and averaged.
+
+`_ensure_csv_header` is idempotent and includes a one-shot
+migration for installs upgrading from a pre-0.4.0 CSV (legacy
+4-column header `epoch,attr,result,delta_ms`): on first run the
+header is rewritten in place to the new 5-column shape and
+legacy rows are padded with an empty trailing field so column
+counts stay consistent across the whole file. `tools/zap_stats.py`
 summarises the CSV with min / median / mean / max per
 (attr, result).
+
+The `evTunedIn` anchor that drives the CSV measures up to demux
+lock, **not** up to the first descrambled frame. On scrambled
+HIT zaps with `prewarm_descrambler_*` off the CSV's `delta_ms`
+therefore understates the wall-clock zap by one ECM round-trip
+(~400 ms). The understatement does not affect the FTA columns
+or the cross-config comparison; it is a property of the anchor
+itself.
 
 ## Safety envelope
 

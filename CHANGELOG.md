@@ -3,6 +3,59 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-05-31
+
+### Changed
+- Pre-tune of scrambled channels no longer engages the CA descrambler
+  by default. The pool now calls `iRecordableService.prepare()` with
+  the canonical 9-argument signature (verified against
+  `openatv/enigma2` branch 7.6 `lib/python/RecordTimer.py`) and passes
+  `descramble=False`. The FBC tuner still locks the target transponder,
+  channel-sharing at swap-in is unaffected, but no parallel ECM /
+  decoder load is added to the user's softcam / OSCam dvbapi /
+  cardsharing / CI+ CAM path during pre-tune arm cycles. Safe for
+  cardsharing setups (no anti-share ECM heat), single-decode CAMs
+  (no contention with live) and CI+ modules.
+
+  User-visible effect: scrambled HIT zaps show a brief black frame
+  (~400 ms, one ECM round-trip) between tuner lock and clear picture.
+  Free-to-air channels are unaffected.
+
+### Added
+- Three per-direction toggles to opt back into the v0.3.7-style
+  pre-warm behaviour: `prewarm_descrambler_history`,
+  `prewarm_descrambler_next`, `prewarm_descrambler_prev` (all
+  default off). Each engages the descrambler during pre-tune for the
+  matching direction. HISTORY-only is the recommended opt-in for
+  users who want faster pay-TV recall without the high ECM burst
+  rate of NEXT/PREV (which re-arm on every zap).
+- `target_ref` column in `/tmp/fbc_csc_timing.csv` and the
+  `ZAP_TIMING` log line. The currently-playing service reference is
+  captured at `evTunedIn` so off-box analysis can classify FTA vs
+  scrambled per zap (cross-reference against `lamedb5`).
+- CSV header migrate-on-first-write. A pre-0.4.0 timing CSV with the
+  legacy 4-column header is rewritten in place on first launch:
+  header replaced with the new 5-column shape, legacy rows padded
+  with an empty trailing `target_ref` so the file stays
+  CSV-clean for off-box analysis. Idempotent; runs once per
+  upgrade and is a no-op thereafter.
+
+### Documentation
+- New "Descrambler behaviour and pay-TV channels" section in
+  `docs/architecture.md` describing the `descramble=False` default,
+  the canonical 9-arg `iRecordableService.prepare()` signature with
+  provenance, the per-direction toggles, the swap-in descrambler-
+  initialisation mechanic, and the OSCam dvbapi handshake
+  operational note.
+
+### Notes
+- On some softcam configurations (observed with OSCam-smod) the
+  dvbapi socket can desynchronise after an enigma2 restart, leaving
+  pay-TV channels black. The fix is to restart the softcam manager
+  (`/etc/init.d/softcam stop && /etc/init.d/softcam start`). The
+  plugin itself never touches the softcam directly; this is an
+  enigma2 ↔ softcam handshake issue.
+
 ## [0.3.7] - 2026-05-24
 
 ### Added

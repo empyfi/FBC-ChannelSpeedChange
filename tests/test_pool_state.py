@@ -300,9 +300,75 @@ class PoolTests(unittest.TestCase):
             self.assertTrue(rec.prepared, "prepare must be called when use_real_pretune is on")
             self.assertTrue(rec.started, "start must be called after successful prepare")
             self.assertIsNotNone(rec.prepare_args)
+            # Canonical 9-arg iRecordableService.prepare signature, verified
+            # against openatv/enigma2 7.6 lib/python/RecordTimer.py:
+            #   (filename, begin, end, eit_event_id,
+            #    name, description, tags, descramble, record_ecm)
+            # Locked here as a regression guard against accidentally
+            # falling back to the 4-arg form (which leaks descramble=True
+            # via the C++ default).
+            self.assertEqual(len(rec.prepare_args), 9,
+                             "prepare must be called with the 9-arg form")
             self.assertTrue(rec.prepare_args[0].startswith("/tmp/fbc_csc_pretune_"),
                             "prepare must receive a non-empty /tmp path")
+            self.assertFalse(rec.prepare_args[7],
+                             "descramble defaults False so the CA path stays disengaged")
+            self.assertFalse(rec.prepare_args[8],
+                             "record_ecm must stay False")
         finally:
+            _cfg.use_real_pretune.value = False
+
+    def test_prewarm_descrambler_history_only(self):
+        """HISTORY-only opt-in is the cardsharing-safe configuration:
+        only the HISTORY slot pre-engages the descrambler; NEXT and
+        PREV stay at descramble=False so the high-burst per-zap
+        rotation never adds ECM heat.
+        """
+        pool, nav, _ = make_pool(fbc_count=4)
+        pool.configure({Role.NEXT: 1, Role.PREV: 1, Role.HISTORY: 1})
+        _cfg.use_real_pretune.value = True
+        _cfg.prewarm_descrambler_history.value = True
+        try:
+            pool.arm({
+                Role.NEXT: [FakeRef("1:0:1:N:0:0:0:0:0:0:")],
+                Role.PREV: [FakeRef("1:0:1:P:0:0:0:0:0:0:")],
+                Role.HISTORY: [FakeRef("1:0:1:H:0:0:0:0:0:0:")],
+            })
+            by_ref = {ref.toString(): rec for ref, rec in nav.allocations}
+            self.assertTrue(by_ref["1:0:1:H:0:0:0:0:0:0:"].prepare_args[7],
+                            "HISTORY opt-in -> descramble=True")
+            self.assertFalse(by_ref["1:0:1:N:0:0:0:0:0:0:"].prepare_args[7],
+                             "NEXT not opted in -> descramble=False")
+            self.assertFalse(by_ref["1:0:1:P:0:0:0:0:0:0:"].prepare_args[7],
+                             "PREV not opted in -> descramble=False")
+        finally:
+            _cfg.prewarm_descrambler_history.value = False
+            _cfg.use_real_pretune.value = False
+
+    def test_prewarm_descrambler_all_on(self):
+        """All three opt-ins on - every role pre-engages the descrambler.
+        This is the v0.3.7-equivalent behaviour for users with a verified
+        multi-decode capable card and no cardsharing concern.
+        """
+        pool, nav, _ = make_pool(fbc_count=4)
+        pool.configure({Role.NEXT: 1, Role.PREV: 1, Role.HISTORY: 1})
+        _cfg.use_real_pretune.value = True
+        _cfg.prewarm_descrambler_history.value = True
+        _cfg.prewarm_descrambler_next.value = True
+        _cfg.prewarm_descrambler_prev.value = True
+        try:
+            pool.arm({
+                Role.NEXT: [FakeRef("1:0:1:N:0:0:0:0:0:0:")],
+                Role.PREV: [FakeRef("1:0:1:P:0:0:0:0:0:0:")],
+                Role.HISTORY: [FakeRef("1:0:1:H:0:0:0:0:0:0:")],
+            })
+            for ref, rec in nav.allocations:
+                self.assertTrue(rec.prepare_args[7],
+                                "all opt-ins on -> descramble=True for every role")
+        finally:
+            _cfg.prewarm_descrambler_history.value = False
+            _cfg.prewarm_descrambler_next.value = False
+            _cfg.prewarm_descrambler_prev.value = False
             _cfg.use_real_pretune.value = False
 
     def test_release_stops_started_recordable(self):

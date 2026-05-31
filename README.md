@@ -40,6 +40,12 @@ hardware.
 - Pre-tune PREVIOUS channel in the bouquet
 - Pre-tune LAST-WATCHED channel (History / Recall zap)
 - Per-direction yes/no toggle in the settings UI
+- Pay-TV-safe by default: pre-tunes scrambled channels at the
+  transponder level only; the CA descrambler stays disengaged
+  so cardsharing setups, single-decode CAMs and CI+ modules see
+  no extra load. Per-direction opt-in toggles let users with a
+  capable card reclaim the full HD+ HIT speedup. See "Pay-TV
+  channels" below.
 - FBC-only allocation — refuses to touch USB or non-FBC slots
 - Auto-release of the pre-tune pool when a recording enters
   STATE_PREPARED (before the recorder needs the demod)
@@ -66,7 +72,7 @@ hardware.
   `fallocate(PUNCH_HOLE | KEEP_SIZE)` so the throwaway pre-tune
   `.ts` files do not balloon RAM
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (42 tests at the time of writing)
+  unit-tested off-box (44 tests at the time of writing)
 
 ## Measured performance
 
@@ -139,8 +145,11 @@ install path is the plugin browser on the receiver:
 → OK → restart enigma2 when prompted.
 
 After the restart, open **Menu → Plugins → FBC ChannelSpeedChange**
-to fine-tune. All three pretune toggles (next / previous /
-last-watched) are enabled by default.
+to fine-tune. All three pre-tune toggles (next / previous /
+last-watched) are enabled by default. The three new **pre-warm
+pay-TV descrambler** toggles are off by default for compatibility
+with cardsharing setups, single-decode CAMs and CI+ modules — see
+"Pay-TV channels" below.
 
 ### Get the latest release directly
 
@@ -151,7 +160,7 @@ just landed):
 
 ```sh
 ssh root@<your-box>
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.3.7/enigma2-plugin-extensions-fbc-channelspeedchange_0.3.7_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.4.0/enigma2-plugin-extensions-fbc-channelspeedchange_0.4.0_all.ipk -O /tmp/fbc.ipk
 opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
@@ -191,6 +200,9 @@ box; autotools is for distribution maintainers.
 | Pre-tune NEXT channel | yes | Reserves one demodulator that stays locked to the next channel in the bouquet. |
 | Pre-tune PREVIOUS channel | yes | Same for the previous bouquet entry. |
 | Pre-tune LAST channel (history) | yes | Reserves one demodulator for the most recently watched service, so History Zap (or the top entry of the history selector) becomes instant. |
+| Pre-warm pay-TV descrambler: LAST | no | When yes, the descrambler engages during the LAST/history pre-tune so a History-Zap to a pay-TV channel shows a clear picture immediately. Off by default to keep the card / softcam / cardsharing path quiet. Recommended opt-in for users with verified extra decoder capacity — HISTORY changes slowly (only when the live channel switches) so the burst is minimal. |
+| Pre-warm pay-TV descrambler: NEXT | no | Same for the NEXT pre-tune. NEXT re-arms on every zap, so the ECM burst is significant. Enable only with confidence in the card / softcam capacity. |
+| Pre-warm pay-TV descrambler: PREVIOUS | no | Same for the PREVIOUS pre-tune. Same per-zap re-arm pattern as NEXT. |
 | Release demods on recording | yes | Pool gives up demodulators the moment a recording enters STATE_PREPARED, ahead of the recorder needing them. |
 | Release demods on PiP | yes | Same idea for PiP. |
 | Show zap latency OSD | no | When yes, flashes the per-zap latency in milliseconds (colour-coded) in the top-right corner for 1.5 s. Off by default so it never surprises anyone on upgrade. |
@@ -304,6 +316,79 @@ pre-tune speedup applies as usual. `evInfoChanged` still fires
 from `nav.playService`, so OpenATV's own SaveTimeshift hook and
 permanent-timeshift re-arm continue to work without modification.
 
+## Pay-TV channels (HD+, Sky, ORF, …)
+
+Scrambled channels go through the pre-tune pool by default, but the
+descrambler is **not** pre-engaged. The pool calls `prepare()` with
+`descramble=False`, so the FBC tuner locks the target transponder
+while the CA path (softcam / OSCam dvbapi / CI+ CAM / cardsharing
+upstream) stays quiet. On swap-in, `playService` reuses the locked
+transponder through channel-sharing and the descrambler initialises
+on the live consumer.
+
+**User-visible effect:** scrambled HIT zaps show a brief black frame
+(~400 ms, the descrambler's first ECM round-trip) between the
+moment the tuner locks and the moment the picture appears. The
+on-screen latency overlay measures up to the tuner lock and does
+not include this black-frame portion, so its number underestimates
+the wall-clock zap on a scrambled HIT.
+
+| Pay-TV scenario | Description | Observed (test box) |
+|---|---|---|
+| FTA HIT | unchanged from v0.3.7 | ~90 ms |
+| HD+ HIT, defaults | tuner pre-locked, descrambler initialises on swap-in | ~50 ms tuned + ~400 ms descrambler ≈ ~450 ms total |
+| HD+ HIT, pre-warm opted in (see toggles below) | tuner AND descrambler pre-engaged | ~90 ms total, no black frame |
+| HD+ cold (no pre-tune target) | stock OpenATV cross-transponder zap | ~900 ms |
+
+### When to opt back into pre-warmed descrambling
+
+Three independent toggles in the settings UI restore the
+v0.3.7-style pre-warm behaviour, per direction:
+
+- **Pre-warm pay-TV descrambler: LAST** — the safer opt-in. The
+  HISTORY slot re-arms slowly (only when the live channel
+  changes), so it adds one extra continuous decoder session for
+  the user's most-recently-watched channel. Low ECM burst.
+- **Pre-warm pay-TV descrambler: NEXT** — the NEXT slot re-arms
+  on every zap, walking the bouquet. High ECM burst — each
+  Channel ↓ triggers a fresh ECM for a new service.
+- **Pre-warm pay-TV descrambler: PREVIOUS** — same per-zap re-arm
+  pattern as NEXT but in the other direction.
+
+**Recommended combinations:**
+
+- **All off (default).** Safe for every setup, including
+  cardsharing accounts where anti-share heuristics monitor ECM
+  rate and concurrent decoder sessions. ~400 ms black frame on
+  scrambled HIT zaps.
+- **LAST on, NEXT/PREV off.** Cardsharing-safe-ish opt-in:
+  HISTORY-Zap to a pay-TV channel becomes instant; bouquet
+  walks (Channel ↑/↓) keep the safe default. The single extra
+  continuous decoder session typically stays below anti-share
+  thresholds.
+- **All on.** v0.3.7-equivalent maximum speed. Only recommended
+  if the card has verified multi-decode capacity AND no
+  cardsharing concern. Generates 3-4 parallel decoder sessions
+  during normal zapping.
+
+### Operational note: OSCam restart after enigma2 restart
+
+On some softcam configurations (observed with OSCam-smod
+rsvn11726 + `oscam.conf [dvbapi]` pmt_mode=6) the dvbapi socket
+between enigma2 and the softcam can desynchronise after an
+enigma2 restart. Symptoms: pay-TV channels show a black picture,
+the softcam log fills with "network packet malformed! (no start)"
+and "Unknown socket command received: 0x...". Fix: restart the
+softcam manager.
+
+```sh
+/etc/init.d/softcam stop && /etc/init.d/softcam start
+```
+
+NCam, mainline OSCam and CCcam may behave differently; if pay-TV
+is black after an enigma2 restart, this is the first thing to
+try. The plugin itself never touches the softcam directly.
+
 ## What this plugin will NOT do for you
 
 - Make a single fresh tune across satellites instant. The first lock,
@@ -321,7 +406,7 @@ permanent-timeshift re-arm continue to work without modification.
 
 ## Project status
 
-v0.3.7 is the current build for long-term testing on the GigaBlue
+v0.4.0 is the current build for long-term testing on the GigaBlue
 UHD Quad 4K Pro under OpenATV 7.6.0. Everything in the feature
 table works on this hardware. The pool has survived multiple
 parallel recordings + PiP + rapid-fire zapping for hours without a
