@@ -18,11 +18,15 @@ CAMs and CI+ modules. Free-to-air channels are unaffected.
 To restore v0.3.7-style fast pay-TV zaps — only safe with a
 multi-decode capable card AND no cardsharing concern — enable
 one or more of the **Pre-warm pay-TV descrambler** toggles in
-the plugin settings. The HISTORY toggle is the recommended
-opt-in: it adds a single slowly-rotating decoder session and
-typically stays below cardsharing anti-share thresholds, while
-the NEXT / PREVIOUS toggles re-arm on every zap and generate a
-much higher ECM burst. Full trade-off in the **Pay-TV channels**
+the plugin settings. Each enabled direction holds one extra
+continuous descrambler session above the live consumer; all
+three re-arm on every zap at roughly the same rate. Card load
+scales linearly with the number of enabled toggles, so on
+tight-budget setups (strict cardsharing limits, single-decode
+CAMs) pick the single direction that matches your zap pattern:
+HISTORY if you recall-zap between a small set of favourites
+(low long-term service diversity), NEXT/PREV if you walk the
+bouquet linearly. Full trade-off in the **Pay-TV channels**
 section below.
 
 ## Why another zap accelerator?
@@ -218,9 +222,9 @@ box; autotools is for distribution maintainers.
 | Pre-tune NEXT channel | yes | Reserves one demodulator that stays locked to the next channel in the bouquet. |
 | Pre-tune PREVIOUS channel | yes | Same for the previous bouquet entry. |
 | Pre-tune LAST channel (history) | yes | Reserves one demodulator for the most recently watched service, so History Zap (or the top entry of the history selector) becomes instant. |
-| Pre-warm pay-TV descrambler: LAST | no | When yes, the descrambler engages during the LAST/history pre-tune so a History-Zap to a pay-TV channel shows a clear picture immediately. Off by default to keep the card / softcam / cardsharing path quiet. Recommended opt-in for users with verified extra decoder capacity — HISTORY changes slowly (only when the live channel switches) so the burst is minimal. |
-| Pre-warm pay-TV descrambler: NEXT | no | Same for the NEXT pre-tune. NEXT re-arms on every zap, so the ECM burst is significant. Enable only with confidence in the card / softcam capacity. |
-| Pre-warm pay-TV descrambler: PREVIOUS | no | Same for the PREVIOUS pre-tune. Same per-zap re-arm pattern as NEXT. |
+| Pre-warm pay-TV descrambler: LAST | no | When yes, the descrambler engages during the LAST/history pre-tune so a History-Zap to a pay-TV channel shows a clear picture immediately. Off by default to keep the card / softcam / cardsharing path quiet. Adds one extra continuous descrambler session that tracks the user's last-watched channel — for recall-heavy watching (ping-pong between a small set of favourites) this is typically the most useful single-toggle opt-in because the HIT rate per session is high and the long-term service diversity is low. |
+| Pre-warm pay-TV descrambler: NEXT | no | Same for the NEXT pre-tune. Adds one extra continuous descrambler session on the next-in-bouquet service. Re-arms on every zap, same per-zap pattern as the other two; useful for users who walk the bouquet linearly with Channel ↓. |
+| Pre-warm pay-TV descrambler: PREVIOUS | no | Same for the PREVIOUS pre-tune. Adds one extra continuous descrambler session on the previous-in-bouquet service; useful for users who walk the bouquet linearly with Channel ↑. |
 | Release demods on recording | yes | Pool gives up demodulators the moment a recording enters STATE_PREPARED, ahead of the recorder needing them. |
 | Release demods on PiP | yes | Same idea for PiP. |
 | Show zap latency OSD | no | When yes, flashes the per-zap latency in milliseconds (colour-coded) in the top-right corner for 1.5 s. Off by default so it never surprises anyone on upgrade. |
@@ -361,32 +365,43 @@ the wall-clock zap on a scrambled HIT.
 ### When to opt back into pre-warmed descrambling
 
 Three independent toggles in the settings UI restore the
-v0.3.7-style pre-warm behaviour, per direction:
+v0.3.7-style pre-warm behaviour, per direction. All three
+re-arm on every zap at the same rate, so per-zap ECM bursts
+are symmetric. The asymmetry is which *set of services* each
+direction touches over a long session:
 
-- **Pre-warm pay-TV descrambler: LAST** — the safer opt-in. The
-  HISTORY slot re-arms slowly (only when the live channel
-  changes), so it adds one extra continuous decoder session for
-  the user's most-recently-watched channel. Low ECM burst.
-- **Pre-warm pay-TV descrambler: NEXT** — the NEXT slot re-arms
-  on every zap, walking the bouquet. High ECM burst — each
-  Channel ↓ triggers a fresh ECM for a new service.
-- **Pre-warm pay-TV descrambler: PREVIOUS** — same per-zap re-arm
-  pattern as NEXT but in the other direction.
+- **Pre-warm pay-TV descrambler: LAST** — tracks the user's
+  recently-watched channels. For users who recall-zap between
+  a small set of favourites, this set stays small and the
+  pre-tune HIT rate per descrambler session is high.
+- **Pre-warm pay-TV descrambler: NEXT** — tracks the next-in-
+  bouquet service. For users who walk the bouquet linearly with
+  Channel ↓ this is the high-HIT direction.
+- **Pre-warm pay-TV descrambler: PREVIOUS** — tracks the
+  previous-in-bouquet service. High-HIT direction for users who
+  walk the bouquet linearly with Channel ↑.
+
+Card / softcam load is one extra continuous descrambler session
+per enabled toggle, on top of the live consumer. The load scales
+linearly with how many toggles are on, not with which one.
 
 **Recommended combinations:**
 
 - **All off (default).** Safe for every setup, including
-  cardsharing accounts where anti-share heuristics monitor ECM
-  rate and concurrent decoder sessions. ~400 ms black frame on
-  scrambled HIT zaps.
-- **LAST on, NEXT/PREV off.** Cardsharing-safe-ish opt-in:
-  HISTORY-Zap to a pay-TV channel becomes instant; bouquet
-  walks (Channel ↑/↓) keep the safe default. The single extra
-  continuous decoder session typically stays below anti-share
-  thresholds.
+  cardsharing accounts. ~400 ms black frame on scrambled HIT
+  zaps. The only configuration that produces zero extra ECM
+  traffic.
+- **One toggle on, the matching one for your zap pattern.** Adds
+  +1 continuous decoder session above the live baseline. Pick
+  HISTORY for recall-heavy watching, NEXT or PREV for bouquet
+  walking. Acceptable on most setups including many cardsharing
+  accounts (single extra session typically stays well below
+  ECM-rate anti-share thresholds, though service-diversity
+  thresholds favour HISTORY when the user has a small favourite
+  set).
 - **All on.** v0.3.7-equivalent maximum speed. Only recommended
-  if the card has verified multi-decode capacity AND no
-  cardsharing concern. Generates 3-4 parallel decoder sessions
+  with verified multi-decode capacity AND no cardsharing concern.
+  Generates 3 extra parallel decoder sessions on top of live
   during normal zapping.
 
 ### Operational note: OSCam restart after enigma2 restart

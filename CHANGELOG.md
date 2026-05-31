@@ -26,9 +26,16 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   pre-warm behaviour: `prewarm_descrambler_history`,
   `prewarm_descrambler_next`, `prewarm_descrambler_prev` (all
   default off). Each engages the descrambler during pre-tune for the
-  matching direction. HISTORY-only is the recommended opt-in for
-  users who want faster pay-TV recall without the high ECM burst
-  rate of NEXT/PREV (which re-arm on every zap).
+  matching direction. All three re-arm on every zap at the same
+  rate, so per-zap ECM burst and parallel-decode count are
+  symmetric; what differs is the long-term set of services each
+  direction touches. HISTORY tracks the user's actually-watched
+  channels (small set for recall-heavy viewing, low service-
+  diversity exposure); NEXT/PREV track bouquet-position neighbours
+  (potentially wider set over a long session). Pick by usage
+  pattern: HISTORY for recall-heavy watching, NEXT or PREV for
+  bouquet walking. Card / softcam load scales linearly with the
+  number of enabled toggles.
 - `target_ref` column in `/tmp/fbc_csc_timing.csv` and the
   `ZAP_TIMING` log line. The currently-playing service reference is
   captured at `evTunedIn` so off-box analysis can classify FTA vs

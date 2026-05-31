@@ -156,12 +156,28 @@ suspicious traffic, single-decode CAMs see contention with live,
 and CI+ modules with limited parallel-decode capacity may drop
 the live channel to black.
 
-The per-direction split is deliberate: HISTORY pre-tunes a single
-slowly-rotating service, while NEXT/PREV walk the bouquet at zap
-speed. A user with verified extra-decoder capacity but
-cardsharing concerns can enable HISTORY only — that single
-continuous decode is typically below anti-share thresholds while
-NEXT/PREV's per-zap rotation is not.
+The per-direction split is deliberate. All three slots re-arm on
+every zap at the same rate, so per-zap ECM bursts and the
+parallel-decode count are symmetric across the three directions.
+What differs is the *set of services* each direction touches
+over a long session:
+
+* HISTORY tracks the user's actually-watched channels (returned
+  by `predictor.history_service()`, sourced from
+  `InfoBar.servicelist.history`). For users who recall-zap
+  between a small set of favourites this set stays small.
+* NEXT and PREV track bouquet-position-relative neighbours
+  (`predictor._neighbors(±1)`). Over a long session a
+  bouquet-walker can hit a substantially wider set of services.
+
+Anti-share heuristics that track service diversity over a long
+window therefore see HISTORY as low-diversity (matches normal
+viewer behaviour) and NEXT/PREV as higher-diversity. Anti-share
+heuristics that only track ECM rate per minute see no difference.
+A user wanting to enable one toggle and minimise long-window
+service-diversity exposure should pick HISTORY; a user wanting
+to maximise HIT rate during linear bouquet walks should pick
+NEXT or PREV (whichever direction they actually use).
 
 ### OSCam dvbapi handshake after enigma2 restart
 
