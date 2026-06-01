@@ -512,10 +512,44 @@ demuxer IDs when the TCP socket half-closes, so the new
 enigma2 connection's PMT messages get interpreted in the stale
 context and framing slips. Restarting the softcam manager
 drops the in-memory state and the next enigma2 handshake is
-clean. Workarounds without a softcam restart: trying
-`pmt_mode = 1` or `pmt_mode = 4` in `oscam.conf` (different
-PMT discovery, often handles reconnects more cleanly), or
-moving to mainline OSCam / NCam.
+clean.
+
+**Workaround that avoids the softcam restart entirely:** switch
+`oscam.conf [dvbapi] pmt_mode` from `6` to `4`. Mode 4 uses a
+file-based PMT-discovery path that survives enigma2's socket
+half-close cleanly. Verified on OSCam-smod rsvn11726 on the
+GigaBlue test bench: an `init 4 && init 3` cycle no longer
+breaks the dvbapi handshake, ECMs keep flowing without
+intervention, no "network packet malformed" log spam. Pair it
+with `delayer = 0` (harmless on this stack) for an audit-clean
+`[dvbapi]` block:
+
+```
+[dvbapi]
+enabled      = 1
+au           = 1
+boxtype      = dreambox
+user         = dvbapi
+pmt_mode     = 4
+request_mode = 1
+delayer      = 0
+```
+
+Mainline OSCam, NCam, mgcamd and CCcam are untested for this
+specific failure mode; pmt_mode 1 is also worth a try on those
+stacks.
+
+While tuning oscam.conf, two more knobs are worth setting for
+users who enable any of the **Activate descrambler in … pay-TV
+pre-tune** toggles: `[global] cachedelay = 0` and
+`[reader] ecmunique = 1`. The first lets CWs serve from cache
+without an artificial delay (helps channel-sharing handover
+between the pre-tune recordable and the live consumer); the
+second drops duplicate ECM requests within a tight window
+(prevents redundant card hits when two pre-tune slots happen
+to hold the same service, e.g. PREV and HISTORY converging
+during a linear bouquet walk). Both are conservative changes
+that reduce card stress without affecting normal viewing.
 
 The plugin itself never touches the softcam directly.
 
