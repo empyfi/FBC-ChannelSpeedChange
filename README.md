@@ -184,6 +184,15 @@ opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
 
+On affected OSCam configurations (see "Operational note" under
+*Pay-TV channels* below) the enigma2 restart at the end of this
+sequence can leave the softcam's dvbapi state stale and pay-TV
+channels black. If that happens, a one-off
+`/etc/init.d/softcam stop && /etc/init.d/softcam start` clears
+it; the same applies after every other enigma2 restart on
+those configs (box reboot, other plugin updates, deep-standby
+wakeup).
+
 `docs/install.md` covers both paths, plus verification,
 troubleshooting and uninstall.
 
@@ -473,13 +482,13 @@ softcam stack and see anything that does not match this
 documentation, the opena.tv forum thread is the place to
 report it.
 
-### Operational note: OSCam restart after enigma2 restart
+### Operational note: OSCam restart after every enigma2 restart
 
 On some softcam configurations (observed with OSCam-smod
 rsvn11726 + `oscam.conf [dvbapi]` pmt_mode=6) the dvbapi socket
-between enigma2 and the softcam can desynchronise after an
-enigma2 restart. Symptoms: pay-TV channels show a black picture,
-the softcam log fills with "network packet malformed! (no start)"
+between enigma2 and the softcam can desynchronise after enigma2
+restarts. Symptoms: pay-TV channels show a black picture, the
+softcam log fills with "network packet malformed! (no start)"
 and "Unknown socket command received: 0x...". Fix: restart the
 softcam manager.
 
@@ -487,9 +496,28 @@ softcam manager.
 /etc/init.d/softcam stop && /etc/init.d/softcam start
 ```
 
-NCam, mainline OSCam and CCcam may behave differently; if pay-TV
-is black after an enigma2 restart, this is the first thing to
-try. The plugin itself never touches the softcam directly.
+This applies to **every** enigma2 restart on an affected
+softcam config, not just on installs of this plugin. The same
+desync triggers on box reboots, on other plugins' updates, on
+deep-standby wakeups, on manual `init 4 && init 3`, and so on
+— anything that closes and re-opens the enigma2 → dvbapi
+socket. Plugin updates make it visible because the
+`opkg install … && init 4 && init 3` sequence in the install
+instructions above ends with a fresh enigma2 process, and the
+user then deliberately checks pay-TV.
+
+Root cause is on the softcam side: OSCam-smod's dvbapi state
+machine does not clean up the previous client's tracked
+demuxer IDs when the TCP socket half-closes, so the new
+enigma2 connection's PMT messages get interpreted in the stale
+context and framing slips. Restarting the softcam manager
+drops the in-memory state and the next enigma2 handshake is
+clean. Workarounds without a softcam restart: trying
+`pmt_mode = 1` or `pmt_mode = 4` in `oscam.conf` (different
+PMT discovery, often handles reconnects more cleanly), or
+moving to mainline OSCam / NCam.
+
+The plugin itself never touches the softcam directly.
 
 ## What this plugin will NOT do for you
 
