@@ -46,15 +46,15 @@ msgid "Pre-tune LAST channel (history)"
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-warm pay-TV descrambler: LAST"
+msgid "Activate descrambler in NEXT pay-TV pre-tune"
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-warm pay-TV descrambler: NEXT"
+msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-warm pay-TV descrambler: PREVIOUS"
+msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py

@@ -40,14 +40,14 @@ msgstr "Vorherigen Sender vorhalten"
 msgid "Pre-tune LAST channel (history)"
 msgstr "Zuletzt gesehenen Sender vorhalten"
 
-msgid "Pre-warm pay-TV descrambler: LAST"
-msgstr "Pay-TV-Descrambler vorwärmen: ZULETZT"
+msgid "Activate descrambler in NEXT pay-TV pre-tune"
+msgstr "Descrambler beim nächsten Pay-TV-Vorhalten aktivieren"
 
-msgid "Pre-warm pay-TV descrambler: NEXT"
-msgstr "Pay-TV-Descrambler vorwärmen: NÄCHSTER"
+msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
+msgstr "Descrambler beim vorherigen Pay-TV-Vorhalten aktivieren"
 
-msgid "Pre-warm pay-TV descrambler: PREVIOUS"
-msgstr "Pay-TV-Descrambler vorwärmen: VORHERIGER"
+msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
+msgstr "Descrambler beim zuletzt gesehenen Pay-TV-Vorhalten aktivieren"
 
 msgid "Release demods when recording starts"
 msgstr "Tuner freigeben bei Aufnahmestart"

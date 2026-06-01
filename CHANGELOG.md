@@ -23,19 +23,26 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - Three per-direction toggles to opt back into the v0.3.7-style
-  pre-warm behaviour: `prewarm_descrambler_history`,
-  `prewarm_descrambler_next`, `prewarm_descrambler_prev` (all
-  default off). Each engages the descrambler during pre-tune for the
-  matching direction. All three re-arm on every zap at the same
-  rate, so per-zap ECM burst and parallel-decode count are
-  symmetric; what differs is the long-term set of services each
-  direction touches. HISTORY tracks the user's actually-watched
-  channels (small set for recall-heavy viewing, low service-
-  diversity exposure); NEXT/PREV track bouquet-position neighbours
-  (potentially wider set over a long session). Pick by usage
-  pattern: HISTORY for recall-heavy watching, NEXT or PREV for
-  bouquet walking. Card / softcam load scales linearly with the
-  number of enabled toggles.
+  behaviour where the descrambler engages during pre-tune (UI
+  labels "Activate descrambler in NEXT / PREVIOUS / LAST pay-TV
+  pre-tune"). Internal config keys
+  `prewarm_descrambler_{next,prev,history}` are kept under the
+  old name for settings-file compatibility, all default off.
+  Each engages the descrambler on the matching
+  pre-tune slot. The three slots are mechanically symmetric: all
+  three re-arm on every successful zap, and each enabled toggle
+  holds exactly one continuous descrambler session above the live
+  consumer regardless of zap activity. Per-zap ECM bursts are
+  therefore identical across the three directions; load scales
+  with how many toggles are on, not with which one. The only
+  asymmetry is which user action each slot HITs: HISTORY tracks
+  the last non-live channel and HITs the last-channel button;
+  NEXT and PREV track bouquet neighbours and HIT Channel ↓
+  resp. Channel ↑. For cardsharing setups whose anti-share
+  heuristic looks at long-window service diversity (rather than
+  raw ECM rate), HISTORY's target set stays small for
+  recall-heavy viewing while NEXT/PREV move with the live
+  channel through the bouquet.
 - `target_ref` column in `/tmp/fbc_csc_timing.csv` and the
   `ZAP_TIMING` log line. The currently-playing service reference is
   captured at `evTunedIn` so off-box analysis can classify FTA vs
@@ -54,6 +61,13 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   provenance, the per-direction toggles, the swap-in descrambler-
   initialisation mechanic, and the OSCam dvbapi handshake
   operational note.
+- "Provider coverage" subsection in both `docs/architecture.md`
+  and the README pay-TV section. All measurements (ECM rates,
+  ~400 ms black-frame, parallel-decode capacity) come from a
+  single test bench using HD+ Nagravision (CAID 1843) on
+  OSCam-smod. The `descramble=False` mechanic is provider-
+  agnostic; the numbers themselves will vary on Sky / ORF /
+  CI+ CAM / other softcam configurations.
 
 ### Notes
 - On some softcam configurations (observed with OSCam-smod) the

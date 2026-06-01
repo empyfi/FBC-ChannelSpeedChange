@@ -144,40 +144,95 @@ matching role:
 
 `_kick_real_tune` reads the flag for `slot.role` via
 `_direction_descramble()` and passes it as the 8th positional to
-`prepare()`. When True for a given role, the pretune for that
-role engages the descrambler immediately; an OSCam dvbapi client
+`prepare()`. When True for a given role, that role's pretune
+engages the descrambler immediately: an OSCam dvbapi client
 appears for the service, ECMs flow, and the swap-in shows no
-black frame (the descrambler is already streaming control words).
-The cost is parallel CA load during arm cycles: one extra
-continuous decoder session per HISTORY slot, plus one extra
-session per NEXT/PREV slot that re-arms on every zap. Anti-share
-heuristics on cardsharing accounts read those bursts as
-suspicious traffic, single-decode CAMs see contention with live,
-and CI+ modules with limited parallel-decode capacity may drop
-the live channel to black.
+black frame because the descrambler is already streaming
+control words.
 
-The per-direction split is deliberate. All three slots re-arm on
-every zap at the same rate, so per-zap ECM bursts and the
-parallel-decode count are symmetric across the three directions.
-What differs is the *set of services* each direction touches
-over a long session:
+The three slots are mechanically symmetric. Each slot:
 
-* HISTORY tracks the user's actually-watched channels (returned
-  by `predictor.history_service()`, sourced from
-  `InfoBar.servicelist.history`). For users who recall-zap
-  between a small set of favourites this set stays small.
-* NEXT and PREV track bouquet-position-relative neighbours
-  (`predictor._neighbors(±1)`). Over a long session a
-  bouquet-walker can hit a substantially wider set of services.
+* is re-armed by the controller after every successful zap
+  (the predictor is re-queried with the new live service, the
+  pool tears down any stale recordable, and `_kick_real_tune`
+  starts a fresh recordable for the new target);
+* when its toggle is on, holds exactly one continuous
+  descrambler session above the live consumer for as long as
+  the slot stays on its target — independent of how often the
+  user zaps;
+* when re-armed to a new target, produces at most one fresh
+  descrambler-init ECM round-trip for that new target.
+
+So with all three toggles on, parallel-decode count is 3 + 1
+(live) and the ECM rate is the sum of four continuous sessions.
+With one toggle on, it is 1 + 1. There is no per-zap penalty
+that distinguishes HISTORY from NEXT or PREV; the only
+asymmetry is *which service* each slot ends up holding.
+
+Each direction tracks a specific user action:
+
+* **HISTORY** = `predictor.history_service()` — the most recent
+  non-live entry of `InfoBar.servicelist.history` (i.e. the
+  channel the user just zapped away from). HITs the last-channel
+  button and the top entry of the history selector.
+* **NEXT** = `predictor.next_service()` →
+  `bouquet[live_idx + 1]`. HITs Channel ↓.
+* **PREV** = `predictor.prev_service()` →
+  `bouquet[live_idx - 1]`. HITs Channel ↑.
+
+In a pure linear bouquet walk (mostly Channel ↑ or ↓) the
+matching directional slot HITs every step. In that pattern the
+HISTORY target converges on the same service as the opposite-
+direction slot (both end up holding the just-departed channel);
+enabling HISTORY on top of the active walking direction
+allocates a second recordable for the same service. Demods are
+not wasted thanks to channel-sharing inside `eDVBResourceManager`,
+but the dvbapi side sees two demuxer subscriptions and (cache
+behaviour permitting) up to two parallel ECM streams for the
+same service.
+
+In a recall-heavy pattern (last-channel button between a small
+set of favourites) HISTORY HITs every recall; NEXT/PREV hold
+bouquet neighbours of whichever channel happens to be live and
+rarely HIT.
 
 Anti-share heuristics that track service diversity over a long
-window therefore see HISTORY as low-diversity (matches normal
-viewer behaviour) and NEXT/PREV as higher-diversity. Anti-share
-heuristics that only track ECM rate per minute see no difference.
-A user wanting to enable one toggle and minimise long-window
-service-diversity exposure should pick HISTORY; a user wanting
-to maximise HIT rate during linear bouquet walks should pick
-NEXT or PREV (whichever direction they actually use).
+window therefore see HISTORY's target set as small (constrained
+by the user's recall pattern) and NEXT/PREV's target set as
+wider (whatever the bouquet positions around live happen to be
+as live moves). Anti-share heuristics that only track ECM rate
+or concurrent session count see no difference between the three
+directions.
+
+### Provider coverage
+
+All empirical numbers in this section (ECM rates, ~400 ms
+black-frame duration, the three-parallel-decode observation)
+were measured against a single test bench: an HD+ subscription
+smartcard (CAID 1843, Nagravision Aladin) in the GigaBlue UHD
+Quad 4K Pro's internal sci0 reader, descrambled by OSCam-smod
+through enigma2's dvbapi link.
+
+The `descramble=False` mechanic itself lives in
+`eDVBServiceRecord` ahead of any CA system and is therefore
+provider-agnostic. Sky DE / UK / IT (Videoguard, NagraMA), ORF
+(Cryptoworks, Irdeto), M7 Group, Vodafone GigaTV, freenet TV /
+Diveo via CI+ CAM and similar should exercise the same code path
+identically. The specific numbers will not all transfer:
+
+* Black-frame duration is the first-ECM round-trip for the
+  specific CA system plus any reader pairing check. Roughly
+  200–700 ms across common consumer pay-TV stacks.
+* Parallel-decode capacity (relevant when any
+  `prewarm_descrambler_*` flag is on) is a hardware property of
+  the card / CAM / sharing server. Most consumer cards and CI+
+  CAMs handle one or two sessions; cardsharing anti-share
+  thresholds add provider-specific service-rate / diversity
+  limits on top.
+
+NCam (OSCam-derived), CCcam, mgcamd and mainline OSCam may also
+handle the enigma2-restart dvbapi-desync described below
+differently from OSCam-smod.
 
 ### OSCam dvbapi handshake after enigma2 restart
 
