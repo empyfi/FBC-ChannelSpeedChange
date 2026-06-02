@@ -133,6 +133,28 @@ frame on a scrambled HIT between the moment the tuner lock
 completes and the moment the first descrambled frame reaches the
 decoder.
 
+```
+   phase         A) descramble=False  (default)        B) descramble=True  (opt-in)
+   --------      ------------------------------        ----------------------------
+
+   ARM           prepare(descramble=False)             prepare(descramble=True)
+                 tuner locks transponder               tuner locks transponder
+                 no ECM, no card load                  ECM RTT starts immediately;
+                                                       first CW after ~400 ms
+                 slot idle (no CA traffic)             steady CW stream while armed
+
+   ---- user zaps -------------------------------------------------------------------
+
+   SWAP-IN       nav.playService(target)               nav.playService(target)
+                 live attaches via eDVBRM share        live attaches via eDVBRM share
+
+   DESCRAMBLE    initialises NOW on live attach;       already running on the slot;
+                 one ECM RTT (~400 ms)                 live picks up active context
+
+   FIRST FRAME   ~400 ms after tune lock               immediately after tune lock
+                 ===> brief black frame                ===> no black frame
+```
+
 ### Per-direction opt-in to v0.3.7-style pre-warm behaviour
 
 Three independent config flags reverse the default for the
@@ -293,6 +315,26 @@ The interceptor splits behaviour by hooked method:
   history list stay consistent. The original method's listbox
   refresh is skipped to keep zap perception snappy.
 
+  ```
+  user presses Channel ↓
+       |
+       v
+  +-- InfoBar.zapDown  (wrapped by Interceptor;
+  |   original body NOT executed: no listbox refresh)
+  |
+  +-- Interceptor runs the bypass:
+  |     1. ref = predictor.next_service()
+  |     2. pool.swap_in(ref)
+  |          -> slot already LOCKED; eDVBRM reuses the tuner
+  |     3. nav.playService(ref)
+  |          -> live consumer attaches to the shared channel
+  |     4. servicelist.setCurrentSelection(ref)
+  |     5. servicelist.addToHistory(ref)
+  |
+  v
+  zap complete
+  ```
+
 * `historyBack` / `historyNext` take the **pass-through** path:
   pool.confirm_hit() returns the slot reference, the original
   method runs normally (it needs `history_pos` walking, not a
@@ -351,6 +393,45 @@ intentional: it lets the live tune complete first to avoid
 competing for resources during the most contended window. After
 that the next/prev/last targets line up for the new current
 position.
+
+```
+              zap completes (HIT / MISS / EXT)
+                         |
+                         v
+           Controller's evTunedIn handler fires
+                         |
+                         v
+              schedule 250 ms re-arm eTimer
+                         |
+                         v   (250 ms later; live tune has settled)
+              re-arm sweep — three independent slots:
+
+  +-------------------+   +-------------------+   +-------------------+
+  |    NEXT slot      |   |    PREV slot      |   |   HISTORY slot    |
+  +-------------------+   +-------------------+   +-------------------+
+  | predictor.        |   | predictor.        |   | predictor.        |
+  |  next_service()   |   |  prev_service()   |   | history_service() |
+  |                   |   |                   |   |                   |
+  | pool teardown     |   | pool teardown     |   | pool teardown     |
+  | if target moved   |   | if target moved   |   | if target moved   |
+  |                   |   |                   |   |                   |
+  | _kick_real_tune   |   | _kick_real_tune   |   | _kick_real_tune   |
+  +---------+---------+   +---------+---------+   +---------+---------+
+            |                       |                       |
+            +-----------------------+-----------------------+
+                                    |
+                                    v
+                each slot runs the same inner state machine
+                (descramble flag = cfg.prewarm_descrambler_<role>):
+
+                       prepare(9-arg) -> start()
+                                |
+                                v
+                        SlotState.TUNING
+                                |
+                                v   (1500 ms eTimer; no real lock event)
+                        SlotState.LOCKED
+```
 
 ## Why dependency injection everywhere
 
