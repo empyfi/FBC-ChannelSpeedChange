@@ -18,13 +18,15 @@ CAMs and CI+ modules. Free-to-air channels are unaffected.
 To restore v0.3.7-style fast pay-TV zaps — only safe with a
 multi-decode capable card AND no cardsharing concern — enable
 one or more of the **Activate descrambler in … pay-TV pre-tune**
-toggles in the plugin settings. Each enabled toggle adds exactly
-one continuous descrambler session above the live consumer,
-regardless of zap activity; card load scales linearly with how
-many toggles are on. Pick the direction that matches your zap
-pattern: **NEXT** for Channel ↓, **PREVIOUS** for Channel ↑,
-**LAST** for the last-channel button. Full trade-off in the
-**Pay-TV channels** section below.
+toggles in the plugin settings. Each enabled toggle keeps one
+extra descrambler session running in addition to the live one;
+that extra session stays active for as long as the slot is armed
+— whether the user is actively zapping or just sitting on a
+channel — so card load scales linearly with how many toggles are
+on. Pick the direction that matches your zap pattern: **NEXT**
+for Channel ↑, **PREVIOUS** for Channel ↓, **LAST** for the
+last-channel button. Full trade-off in the **Pay-TV channels**
+section below.
 
 ## Why another zap accelerator?
 
@@ -228,8 +230,8 @@ box; autotools is for distribution maintainers.
 | Pre-tune NEXT channel | yes | Reserves one demodulator that stays locked to the next channel in the bouquet. |
 | Pre-tune PREVIOUS channel | yes | Same for the previous bouquet entry. |
 | Pre-tune LAST channel (history) | yes | Reserves one demodulator for the most recently watched service, so History Zap (or the top entry of the history selector) becomes instant. |
-| Activate descrambler in NEXT pay-TV pre-tune | no | When yes, the descrambler engages on the NEXT pre-tune so a Channel ↓ press into a pay-TV channel skips the ~400 ms black frame. Off by default. Adds one continuous extra descrambler session that holds the next-in-bouquet channel. |
-| Activate descrambler in PREVIOUS pay-TV pre-tune | no | Same for the PREVIOUS pre-tune. Adds one continuous extra descrambler session that holds the previous-in-bouquet channel. HITs a Channel ↑ press into pay-TV. |
+| Activate descrambler in NEXT pay-TV pre-tune | no | When yes, the descrambler engages on the NEXT pre-tune so a Channel ↑ press into a pay-TV channel skips the ~400 ms black frame. Off by default. Adds one continuous extra descrambler session that holds the next-in-bouquet channel. |
+| Activate descrambler in PREVIOUS pay-TV pre-tune | no | Same for the PREVIOUS pre-tune. Adds one continuous extra descrambler session that holds the previous-in-bouquet channel. HITs a Channel ↓ press into pay-TV. |
 | Activate descrambler in LAST pay-TV pre-tune (history) | no | Same for the LAST/history pre-tune. Adds one continuous extra descrambler session that holds the most recently watched non-live channel. HITs the last-channel button and the top entry of the history selector. |
 | Release demods on recording | yes | Pool gives up demodulators the moment a recording enters STATE_PREPARED, ahead of the recorder needing them. |
 | Release demods on PiP | yes | Same idea for PiP. |
@@ -376,12 +378,11 @@ pre-tune, one toggle per pre-tune slot:
 
 - **Activate descrambler in NEXT pay-TV pre-tune** — engages
   the descrambler on the NEXT slot. The NEXT slot holds the
-  bouquet position immediately below live. HITs a Channel ↓
-  press.
+  next bouquet entry after live. HITs a Channel ↑ press.
 - **Activate descrambler in PREVIOUS pay-TV pre-tune** —
   engages the descrambler on the PREVIOUS slot. The PREVIOUS
-  slot holds the bouquet position immediately above live.
-  HITs a Channel ↑ press.
+  slot holds the previous bouquet entry before live. HITs a
+  Channel ↓ press.
 - **Activate descrambler in LAST pay-TV pre-tune (history)** —
   engages the descrambler on the HISTORY slot. The HISTORY slot
   holds the most recent non-live entry of
@@ -389,10 +390,11 @@ pre-tune, one toggle per pre-tune slot:
   left). HITs the last-channel button and the top entry of the
   history selector dialog.
 
-**Resource cost.** Each enabled toggle adds exactly one
-continuous descrambler session above the live consumer.
-Parallel-decode count and ECM rate scale linearly with how many
-toggles are on, not with how often the user zaps. All three
+**Resource cost.** Each enabled toggle keeps one extra
+descrambler session running in addition to the live consumer's.
+The extra session stays active for as long as the slot is armed,
+so parallel-decode count and ECM rate scale linearly with how
+many toggles are on — independent of how often the user zaps. All three
 slots re-arm on every successful zap; per-slot, that re-arm is
 one fresh ECM round-trip for the new target. Per-zap ECM bursts
 are therefore symmetric across the three directions — there is
@@ -402,7 +404,7 @@ no per-zap penalty that distinguishes HISTORY from NEXT or PREV.
 warmed slot is supposed to HIT:
 
 - **Linear bouquet walking** (mostly Channel ↑ or ↓): the
-  matching direction (NEXT for ↓, PREVIOUS for ↑) HITs every
+  matching direction (NEXT for ↑, PREVIOUS for ↓) HITs every
   step. In a pure linear walk HISTORY converges on the same
   service as the opposite-direction slot (both hold the
   just-left channel), so enabling HISTORY on top of the active
@@ -434,8 +436,8 @@ only anti-share signal, this asymmetry does not apply.
 - **All off (default).** Safe for every setup. ~400 ms black
   frame on scrambled HIT zaps. Zero extra ECM traffic.
 - **One toggle on, matching the user's primary zap pattern.**
-  +1 continuous descrambler session. NEXT for ↓ walkers,
-  PREVIOUS for ↑ walkers, LAST for recall-heavy viewers.
+  +1 continuous descrambler session. NEXT for ↑ walkers,
+  PREVIOUS for ↓ walkers, LAST for recall-heavy viewers.
   Acceptable on most setups; on cardsharing accounts a single
   extra session typically stays below ECM-rate thresholds,
   though service-diversity thresholds favour LAST when the

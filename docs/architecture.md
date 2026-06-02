@@ -178,10 +178,10 @@ The three slots are mechanically symmetric. Each slot:
   (the predictor is re-queried with the new live service, the
   pool tears down any stale recordable, and `_kick_real_tune`
   starts a fresh recordable for the new target);
-* when its toggle is on, holds exactly one continuous
-  descrambler session above the live consumer for as long as
-  the slot stays on its target — independent of how often the
-  user zaps;
+* when its toggle is on, keeps one extra descrambler session
+  running in addition to the live one, for as long as the slot
+  stays on its target — even when the user is sitting on a
+  channel and not zapping;
 * when re-armed to a new target, produces at most one fresh
   descrambler-init ECM round-trip for that new target.
 
@@ -198,9 +198,9 @@ Each direction tracks a specific user action:
   channel the user just zapped away from). HITs the last-channel
   button and the top entry of the history selector.
 * **NEXT** = `predictor.next_service()` →
-  `bouquet[live_idx + 1]`. HITs Channel ↓.
+  `bouquet[live_idx + 1]`. HITs Channel ↑.
 * **PREV** = `predictor.prev_service()` →
-  `bouquet[live_idx - 1]`. HITs Channel ↑.
+  `bouquet[live_idx - 1]`. HITs Channel ↓.
 
 In a pure linear bouquet walk (mostly Channel ↑ or ↓) the
 matching directional slot HITs every step. In that pattern the
@@ -316,7 +316,7 @@ The interceptor splits behaviour by hooked method:
   refresh is skipped to keep zap perception snappy.
 
   ```
-  user presses Channel ↓
+  user presses Channel ↑
        |
        v
   +-- InfoBar.zapDown  (wrapped by Interceptor;
@@ -348,7 +348,13 @@ The interceptor splits behaviour by hooked method:
   subscribes to `iPlayableService.evStart` as a fallback timing
   anchor so the OSD overlay still shows a number for those
   zaps; the result is labelled `EXT` in the timing CSV and the
-  OSD card is tinted cyan.
+  OSD card is tinted cyan. Unlike `historyBack` / `historyNext`
+  — which reliably HIT the HISTORY pool slot because that slot
+  is always armed against the last-watched channel — an
+  external zap only gets the channel-share speedup if the
+  user-picked target happens to coincide with one of the three
+  armed pool slots. For arbitrary numeric input that match is
+  rare, so most numeric zaps land as cold tunes.
 
 ## ServiceReference identity normalisation
 

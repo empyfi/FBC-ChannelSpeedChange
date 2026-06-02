@@ -37,8 +37,8 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   with how many toggles are on, not with which one. The only
   asymmetry is which user action each slot HITs: HISTORY tracks
   the last non-live channel and HITs the last-channel button;
-  NEXT and PREV track bouquet neighbours and HIT Channel ↓
-  resp. Channel ↑. For cardsharing setups whose anti-share
+  NEXT and PREV track bouquet neighbours and HIT Channel ↑
+  resp. Channel ↓. For cardsharing setups whose anti-share
   heuristic looks at long-window service diversity (rather than
   raw ECM rate), HISTORY's target set stays small for
   recall-heavy viewing while NEXT/PREV move with the live
