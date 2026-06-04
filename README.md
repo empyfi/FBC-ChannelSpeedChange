@@ -103,12 +103,7 @@ FTA/HD+ bouquet, v0.4.0). Medians over ~30 hand-driven zaps per
 configuration; the HIT rows use the pre-tune-on fast-bypass path,
 the cold row is the same bouquet with pre-tune disabled:
 
-| Zap path | n | min | **median** | mean | max |
-|---|---|---|---|---|---|
-| Channel ↑ — plugin HIT via fast bypass | 23 | 101 ms | **116 ms** | 122 ms | 201 ms |
-| Channel ↓ — plugin HIT via fast bypass | 24 | 99 ms | **111 ms** | 123 ms | 194 ms |
-| History / Recall zap — pretune HIT | 8 | 43 ms | **51 ms** | 51 ms | 54 ms |
-| Cold cross-transponder zap, no pre-tune | 18 | 841 ms | **916 ms** | 912 ms | 1002 ms |
+![Zap latency by path — plugin HIT vs cold no-pre-tune](docs/img/zap-latency.png)
 
 **Every Channel ↑/↓ press hit the pool: 47 / 47** across the
 pre-tune-on runs — each neighbour press reused a pre-locked
@@ -150,12 +145,6 @@ pre-warmed during pre-tune. The three pre-tune configurations on an HD+
 cross-transponder zap:
 
 ![HD+ cross-transponder zap latency by pre-tune configuration](docs/img/paytv-latency.png)
-
-| Configuration | tuner lock | + descrambler | = picture bright |
-|---|---|---|---|
-| No pre-tune (stock zap) | 914 ms (cold tune) | + 376 ms (on swap-in) | **1290 ms** |
-| Pre-tune, descrambler off (default) | 110 ms (channel-share) | + 376 ms (on swap-in) | **486 ms** |
-| Pre-tune + descrambler pre-warm (opt-in) | ~110 ms (channel-share) | — (pre-warmed) | **113 ms** |
 
 The tuner-lock figure is identical for both pre-tune configurations —
 pre-warming the descrambler does not change when the transponder locks,
@@ -392,6 +381,8 @@ on-screen latency overlay measures up to the tuner lock and does
 not include this black-frame portion, so its number underestimates
 the wall-clock zap on a scrambled HIT.
 
+![HD+ cross-transponder zap latency by pre-tune configuration](docs/img/paytv-latency.png)
+
 Pre-tuning a scrambled channel costs nothing on the card by default —
 the descrambler is only engaged on the live consumer. Optionally
 pre-warming it (per direction, see toggles below) trades card load for
@@ -405,8 +396,9 @@ the elimination of the swap-in black frame:
 
 The extra sessions stay active for as long as the slots are armed, so
 card load scales with how many toggles are on, not with how often the
-user zaps. For the zap-latency breakdown — tuner lock vs descrambler
-cost, with the chart — see the **Measured performance** section above.
+user zaps. The chart above shows the latency side of the same
+trade-off; the per-path zap medians are in the **Measured performance**
+section.
 
 ### When to activate the descrambler during pre-tune
 
