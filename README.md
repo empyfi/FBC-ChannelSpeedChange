@@ -363,12 +363,28 @@ on-screen latency overlay measures up to the tuner lock and does
 not include this black-frame portion, so its number underestimates
 the wall-clock zap on a scrambled HIT.
 
-| Pay-TV scenario | Description | Observed (test box) |
-|---|---|---|
-| FTA HIT | unchanged from v0.3.7 | ~90 ms |
-| HD+ HIT, defaults | tuner pre-locked, descrambler initialises on swap-in | ~50 ms tuned + ~400 ms descrambler ≈ ~450 ms total |
-| HD+ HIT, descrambler-in-pre-tune opted in (see toggles below) | tuner AND descrambler pre-engaged | ~90 ms total, no black frame |
-| HD+ cold (no pre-tune target) | stock OpenATV cross-transponder zap | ~900 ms |
+![HD+ cross-transponder zap latency by pre-tune configuration](docs/img/paytv-latency.png)
+
+| Configuration | tuner lock | + descrambler | = picture bright | extra card load |
+|---|---|---|---|---|
+| No pre-tune (stock zap) | 914 ms (cold tune) | + 376 ms (on swap-in) | **1290 ms** | none |
+| Pre-tune, descrambler off (default) | 110 ms (channel-share) | + 376 ms (on swap-in) | **486 ms** | none |
+| Pre-tune + descrambler pre-warm (opt-in) | ~110 ms (channel-share) | — (pre-warmed) | **113 ms** | 3 continuous sessions |
+
+The tuner-lock figure is identical for both pre-tune configurations —
+pre-warming the descrambler does not change when the transponder locks,
+only whether the first ECM round-trip is already paid by swap-in. FTA
+channels are unaffected by the descrambler column: a pre-tuned FTA zap
+is bright at tuner lock (~120 ms HIT, ~900 ms cold), and intra-transponder
+HD+ zaps are already fast cold (~110 ms), gaining only the descrambler
+saving.
+
+Medians over ~30 hand-driven zaps per configuration across a mixed
+FTA/HD+ bouquet on the GigaBlue UHD Quad 4K Pro (OpenATV 7.6.0). HD+
+Nagra Aladin (CAID 1843) descrambled by OSCam; the descrambler column is
+the first ECM round-trip (~376 ms, card-bound) paid on swap-in when the
+slot was not pre-warmed. The on-screen latency overlay measures the
+tuner-lock column only.
 
 ### When to activate the descrambler during pre-tune
 
