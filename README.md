@@ -3,8 +3,8 @@
 An OpenATV / Enigma2 plugin that accelerates channel zapping on receivers
 with FBC (Full Band Capture) tuners. Designed and field-tested on the
 **GigaBlue UHD Quad 4K Pro**. Measured medians on this hardware:
-**Channel ↑/↓ 117–124 ms**, **History/Recall 59 ms** — down from
-0.7–1.5 s for the same cross-transponder zaps without the plugin. PiP
+**Channel ↑/↓ 111–116 ms**, **History/Recall 51 ms** — down from
+~900 ms for the same cross-transponder zaps without the plugin. PiP
 and Recording always retain priority on the FBC demodulator pool.
 
 ## Upgrading from v0.3.7?
@@ -98,45 +98,74 @@ hardware.
 ## Measured performance
 
 Field measurement on the GigaBlue UHD Quad 4K Pro running
-OpenATV 7.6.0 (`gbquad4kpro`, Astra 19.2°E + 28.2°E + mixed
-HD/SD bouquet, v0.3.0 build, all three pretune toggles on):
+OpenATV 7.6.0 (`gbquad4kpro`, Astra 19.2°E + 28.2°E, mixed
+FTA/HD+ bouquet, v0.4.0). Medians over ~30 hand-driven zaps per
+configuration; the HIT rows use the pre-tune-on fast-bypass path,
+the cold row is the same bouquet with pre-tune disabled:
 
 | Zap path | n | min | **median** | mean | max |
 |---|---|---|---|---|---|
-| Channel ↑ — plugin HIT via fast bypass | 11 | 85 ms | **117 ms** | 138 ms | 229 ms |
-| Channel ↓ — plugin HIT via fast bypass | 17 | 99 ms | **124 ms** | 203 ms | 910 ms |
-| History / Recall zap — pretune cache hit | 12 | 42 ms | **59 ms** | 63 ms | 128 ms |
-| External zap, no pretune target | 11 | 718 ms | 841 ms | 1198 ms | 4362 ms |
-| Wrapper MISS (rare; pool empty during a recording) | 2 | 1646 ms | 1661 ms | 1661 ms | 1676 ms |
+| Channel ↑ — plugin HIT via fast bypass | 23 | 101 ms | **116 ms** | 122 ms | 201 ms |
+| Channel ↓ — plugin HIT via fast bypass | 24 | 99 ms | **111 ms** | 123 ms | 194 ms |
+| History / Recall zap — pretune HIT | 8 | 43 ms | **51 ms** | 51 ms | 54 ms |
+| Cold cross-transponder zap, no pre-tune | 18 | 841 ms | **916 ms** | 912 ms | 1002 ms |
 
-**HIT rate for wrapper-bracketed zaps: 28 / 30 = 93 %.** The two
-MISSes happened during an active recording when the
-ResourceArbiter had released the pool; the plugin transparently
-fell back to the standard enigma2 zap.
+**Every Channel ↑/↓ press hit the pool: 47 / 47** across the
+pre-tune-on runs — each neighbour press reused a pre-locked
+transponder. Recall hits when the last-watched channel is the
+armed history target; an external zap (EPG, numeric input) hits
+only if its target coincides with an armed slot, otherwise it
+falls back to the cold path in the last row.
 
 A few notes on what the numbers say:
 
-* **History zap is the fastest path of all** at 59 ms median —
+* **History zap is the fastest path of all** at 51 ms median —
   faster even than Channel ↑/↓ — because the recall button
   triggers `nav.playService` externally on a transponder where
   the pretune recordable is already locked, so the resource
   manager's channel-sharing kicks in with zero wrapper overhead.
   The pretune for the last-watched service has to be enabled
   (it is, by default) for this to work.
-* **Channel ↑/↓ medians around 120 ms** reflect the fast-bypass
+* **Channel ↑/↓ medians around 110 ms** reflect the fast-bypass
   path: predictor → pool.swap_in → playService → manual history
   bookkeeping, all while the pretune recordable holds the target
   transponder. The decoder init dominates the residual latency
   and cannot be shortened from Python on this build.
-* **External zaps without a pretune target** (e.g. picking a
-  channel in the EPG that is on neither the next nor the
-  previous nor the last-watched transponder) measure ~720–
-  1200 ms. The plugin contributes nothing here; this is the
-  stock OpenATV zap baseline for cross-transponder switches.
-* **The handful of outliers inside the HIT bucket** (910 ms for
-  Channel ↓, 229 ms for Channel ↑) correspond to HD↔SD or LNB-
-  band switches; the pretuned demod was on the right MUX but
-  the decoder still had to reinitialise.
+* **Without pre-tune the same cross-transponder switches cost
+  ~900 ms** — the stock OpenATV baseline (tuner re-lock from
+  cold). This is exactly what the pool removes by keeping the
+  neighbour transponders pre-locked.
+* **Intra-transponder zaps are already fast cold** (~110 ms,
+  neighbour channel on the same MUX): no tuner re-lock is needed,
+  so the pre-tune win is concentrated on cross-transponder
+  switches. For scrambled services the descrambler cost is broken
+  out separately below.
+
+### Scrambled channels (HD+, Sky, ORF, …)
+
+For a scrambled service the picture only turns bright once the
+descrambler has delivered the first control word, so the perceived zap
+is the tuner lock plus one ECM round-trip — unless the descrambler was
+pre-warmed during pre-tune. The three pre-tune configurations on an HD+
+cross-transponder zap:
+
+![HD+ cross-transponder zap latency by pre-tune configuration](docs/img/paytv-latency.png)
+
+| Configuration | tuner lock | + descrambler | = picture bright |
+|---|---|---|---|
+| No pre-tune (stock zap) | 914 ms (cold tune) | + 376 ms (on swap-in) | **1290 ms** |
+| Pre-tune, descrambler off (default) | 110 ms (channel-share) | + 376 ms (on swap-in) | **486 ms** |
+| Pre-tune + descrambler pre-warm (opt-in) | ~110 ms (channel-share) | — (pre-warmed) | **113 ms** |
+
+The tuner-lock figure is identical for both pre-tune configurations —
+pre-warming the descrambler does not change when the transponder locks,
+only whether the first ECM round-trip is already paid by swap-in.
+Intra-transponder HD+ zaps are already fast cold (~110 ms) and gain only
+the descrambler saving. Medians over ~30 hand-driven zaps per
+configuration across a mixed FTA/HD+ bouquet; HD+ Nagra Aladin
+(CAID 1843) via OSCam, ECM round-trip ~376 ms (card-bound). The card-load
+trade-off of pre-warming is covered in the **Pay-TV channels** section
+below.
 
 To reproduce on your own hardware, see
 [`tools/zap_stats.py`](tools/zap_stats.py). Fetch it once on the
@@ -363,28 +392,21 @@ on-screen latency overlay measures up to the tuner lock and does
 not include this black-frame portion, so its number underestimates
 the wall-clock zap on a scrambled HIT.
 
-![HD+ cross-transponder zap latency by pre-tune configuration](docs/img/paytv-latency.png)
+Pre-tuning a scrambled channel costs nothing on the card by default —
+the descrambler is only engaged on the live consumer. Optionally
+pre-warming it (per direction, see toggles below) trades card load for
+the elimination of the swap-in black frame:
 
-| Configuration | tuner lock | + descrambler | = picture bright | extra card load |
-|---|---|---|---|---|
-| No pre-tune (stock zap) | 914 ms (cold tune) | + 376 ms (on swap-in) | **1290 ms** | none |
-| Pre-tune, descrambler off (default) | 110 ms (channel-share) | + 376 ms (on swap-in) | **486 ms** | none |
-| Pre-tune + descrambler pre-warm (opt-in) | ~110 ms (channel-share) | — (pre-warmed) | **113 ms** | 3 continuous sessions |
+| Configuration | extra descrambler sessions | card load while armed | HD+ HIT black frame |
+|---|---|---|---|
+| Descrambler off (default) | none | live channel only | ~376 ms (one ECM on swap-in) |
+| One direction pre-warmed | 1 continuous | +1 ECM stream above live | none in that direction |
+| All three pre-warmed | 3 continuous | 4 parallel ECM streams | none |
 
-The tuner-lock figure is identical for both pre-tune configurations —
-pre-warming the descrambler does not change when the transponder locks,
-only whether the first ECM round-trip is already paid by swap-in. FTA
-channels are unaffected by the descrambler column: a pre-tuned FTA zap
-is bright at tuner lock (~120 ms HIT, ~900 ms cold), and intra-transponder
-HD+ zaps are already fast cold (~110 ms), gaining only the descrambler
-saving.
-
-Medians over ~30 hand-driven zaps per configuration across a mixed
-FTA/HD+ bouquet on the GigaBlue UHD Quad 4K Pro (OpenATV 7.6.0). HD+
-Nagra Aladin (CAID 1843) descrambled by OSCam; the descrambler column is
-the first ECM round-trip (~376 ms, card-bound) paid on swap-in when the
-slot was not pre-warmed. The on-screen latency overlay measures the
-tuner-lock column only.
+The extra sessions stay active for as long as the slots are armed, so
+card load scales with how many toggles are on, not with how often the
+user zaps. For the zap-latency breakdown — tuner lock vs descrambler
+cost, with the chart — see the **Measured performance** section above.
 
 ### When to activate the descrambler during pre-tune
 
