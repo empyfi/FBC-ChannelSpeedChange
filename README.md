@@ -392,13 +392,21 @@ the elimination of the swap-in black frame:
 |---|---|---|---|
 | Descrambler off (default) | none | live channel only | ~376 ms (one ECM on swap-in) |
 | One direction pre-warmed | 1 continuous | +1 ECM stream above live | none in that direction |
-| All three pre-warmed | 3 continuous | 4 parallel ECM streams | none |
+| All three pre-warmed | up to 3 continuous | up to 4 parallel ECM streams | none |
 
 The extra sessions stay active for as long as the slots are armed, so
 card load scales with how many toggles are on, not with how often the
 user zaps. The chart above shows the latency side of the same
 trade-off; the per-path zap medians are in the **Measured performance**
 section.
+
+During linear bouquet walking the HISTORY slot's target coincides with
+the opposite-direction neighbour (PREV when walking Channel ↑, NEXT
+when walking Channel ↓), and the pool drops the redundant HISTORY arm
+— so a steady walk with all three toggles on runs at **2 extra
+sessions / 3 parallel ECM streams**, not 3 / 4. The peak occurs only
+when the three predicted targets all diverge (e.g. a recall lands you
+somewhere unrelated to the previous bouquet walk).
 
 ### When to activate the descrambler during pre-tune
 

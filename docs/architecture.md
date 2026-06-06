@@ -205,13 +205,15 @@ Each direction tracks a specific user action:
 In a pure linear bouquet walk (mostly Channel ↑ or ↓) the
 matching directional slot HITs every step. In that pattern the
 HISTORY target converges on the same service as the opposite-
-direction slot (both end up holding the just-departed channel);
-enabling HISTORY on top of the active walking direction
-allocates a second recordable for the same service. Demods are
-not wasted thanks to channel-sharing inside `eDVBResourceManager`,
-but the dvbapi side sees two demuxer subscriptions and (cache
-behaviour permitting) up to two parallel ECM streams for the
-same service.
+direction slot (both end up on the just-departed channel). The
+controller detects the convergence at re-arm time and drops the
+redundant HISTORY arm — the surviving slot answers any later
+recall via the pool's role-independent lookup, so no recall MISS
+is introduced and the dvbapi side carries only one demuxer
+subscription for that service instead of two. Demods would be
+shared at `eDVBResourceManager` level either way; the saving is on
+the CA side, where it matters for cardsharing setups and
+single-decode CAMs.
 
 In a recall-heavy pattern (last-channel button between a small
 set of favourites) HISTORY HITs every recall; NEXT/PREV hold
@@ -438,6 +440,13 @@ position.
                                 v   (1500 ms eTimer; no real lock event)
                         SlotState.LOCKED
 ```
+
+The HISTORY arm is dropped before the per-slot inner state machine
+runs whenever its target matches the NEXT or PREV target — a state
+that occurs every step of a linear bouquet walk (the just-departed
+channel is what HISTORY would have armed, and it is also what PREV
+or NEXT now points at). See the convergence note in "Descrambler
+behaviour and pay-TV channels" above for the trade-off this avoids.
 
 ## Why dependency injection everywhere
 
