@@ -429,10 +429,16 @@ pre-tune, one toggle per pre-tune slot:
   history selector dialog.
 
 **Resource cost.** Each enabled toggle keeps one extra
-descrambler session running in addition to the live consumer's.
-The extra session stays active for as long as the slot is armed,
-so parallel-decode count and ECM rate scale linearly with how
-many toggles are on — independent of how often the user zaps. All three
+descrambler session running in addition to the live consumer's,
+for as long as the slot is armed. The HISTORY slot is
+automatically dropped from a re-arm cycle when its target
+converges with the NEXT or PREV target — a state that holds at
+every step of a linear bouquet walk — so the all-on configuration
+runs at two extra sessions during a steady walk and only peaks at
+three when the predictor's targets all diverge (e.g. immediately
+after a recall into an unrelated bouquet position). Parallel-decode
+count and ECM rate scale with how many toggles are on, not with
+how often the user zaps. All three
 slots re-arm on every successful zap; per-slot, that re-arm is
 one fresh ECM round-trip for the new target. Per-zap ECM bursts
 are therefore symmetric across the three directions — there is
@@ -444,11 +450,11 @@ warmed slot is supposed to HIT:
 - **Linear bouquet walking** (mostly Channel ↑ or ↓): the
   matching direction (NEXT for ↑, PREVIOUS for ↓) HITs every
   step. In a pure linear walk HISTORY converges on the same
-  service as the opposite-direction slot (both hold the
-  just-left channel), so enabling HISTORY on top of the active
-  walking direction holds the same target twice without
-  producing extra HITs — wasted capacity, even if
-  channel-sharing prevents an extra demod allocation.
+  service as the opposite-direction slot (both point at the
+  just-left channel); the pool detects this at re-arm and drops
+  the HISTORY arm, so enabling the HISTORY toggle on top of the
+  active walking direction costs nothing extra during the walk —
+  the surviving slot still answers any recall via channel-sharing.
 - **Recall-heavy watching** (last-channel button between a small
   set of favourites): HISTORY HITs every recall. NEXT and PREV
   hold bouquet neighbours of whichever channel is currently live
@@ -480,9 +486,12 @@ only anti-share signal, this asymmetry does not apply.
   extra session typically stays below ECM-rate thresholds,
   though service-diversity thresholds favour LAST when the
   user has a small favourite set.
-- **All on.** v0.3.7-equivalent maximum speed. Three extra
-  continuous descrambler sessions. Only recommended with
-  verified multi-decode capacity AND no cardsharing concern.
+- **All on.** v0.3.7-equivalent maximum speed. Up to three extra
+  continuous descrambler sessions — two during steady linear
+  walking, since the convergence-skip drops HISTORY then; three
+  only when NEXT, PREV and HISTORY all point at distinct services.
+  Only recommended with verified multi-decode capacity AND no
+  cardsharing concern.
 
 ### Provider coverage
 
