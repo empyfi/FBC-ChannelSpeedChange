@@ -13,7 +13,7 @@ from . import _
 from .logger import info, debug, warn, error
 from .config import cfg
 from .fbc_pretune_pool import FBCPreTunePool, Role
-from .predictor import Predictor
+from .predictor import Predictor, _key as _ref_key
 from .resource_arbiter import ResourceArbiter
 from .zap_interceptor import ZapInterceptor, sanity_check_infobar
 
@@ -162,14 +162,19 @@ class Controller:
         try:
             if not self._enabled:
                 return
+            next_refs = self._predictor.next_service(count=1) if cfg.pretune_next.value else []
+            prev_refs = self._predictor.prev_service(count=1) if cfg.pretune_prev.value else []
+            # History uses count=1 so only the immediately previous
+            # service is pre-tuned. Deeper history positions are not
+            # pre-tuned; the speedup is only useful for the
+            # one-step-back case.
+            hist_refs = self._predictor.history_service(count=1) if cfg.pretune_history.value else []
+            next_refs, prev_refs, hist_refs = _collapse_history_on_convergence(
+                next_refs, prev_refs, hist_refs)
             plan = {
-                Role.NEXT: self._predictor.next_service(count=1) if cfg.pretune_next.value else [],
-                Role.PREV: self._predictor.prev_service(count=1) if cfg.pretune_prev.value else [],
-                # History uses count=1 so only the immediately previous
-                # service is pre-tuned. Deeper history positions are not
-                # pre-tuned; the speedup is only useful for the
-                # one-step-back case.
-                Role.HISTORY: self._predictor.history_service(count=1) if cfg.pretune_history.value else [],
+                Role.NEXT: next_refs,
+                Role.PREV: prev_refs,
+                Role.HISTORY: hist_refs,
             }
             self._pool.arm(plan)
         except Exception as exc:
@@ -262,3 +267,28 @@ class Controller:
             self._defer_timer.start(1000, False)  # poll every 1 s
         except Exception as exc:
             error("_defer_interceptor_start: %r" % exc)
+
+
+# --- helpers ------------------------------------------------------------
+
+def _collapse_history_on_convergence(next_refs, prev_refs, hist_refs):
+    """During linear bouquet walking the HISTORY target (the
+    just-departed channel) converges on PREV (walking Channel up) or
+    NEXT (walking Channel down). The pool would then hold two
+    recordables on the same service: eDVBResourceManager channel-shares
+    the demod, but the dvbapi side still sees two demuxer subscriptions,
+    and with both directions' prewarm_descrambler flag on the card pays
+    a redundant continuous ECM stream.
+
+    On convergence the HISTORY slot is dropped. A recall still HITs the
+    surviving slot because the pool's lookup is role-independent: it
+    walks every armed slot and returns the first key-matching one.
+    """
+    if not hist_refs:
+        return next_refs, prev_refs, hist_refs
+    hist_key = _ref_key(hist_refs[0])
+    if next_refs and _ref_key(next_refs[0]) == hist_key:
+        return next_refs, prev_refs, []
+    if prev_refs and _ref_key(prev_refs[0]) == hist_key:
+        return next_refs, prev_refs, []
+    return next_refs, prev_refs, hist_refs

@@ -199,7 +199,7 @@ just landed):
 
 ```sh
 ssh root@<your-box>
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.4.0/enigma2-plugin-extensions-fbc-channelspeedchange_0.4.0_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.4.1/enigma2-plugin-extensions-fbc-channelspeedchange_0.4.1_all.ipk -O /tmp/fbc.ipk
 opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
@@ -602,7 +602,7 @@ The plugin itself never touches the softcam directly.
 
 ## Project status
 
-v0.4.0 is the current build for long-term testing on the GigaBlue
+v0.4.1 is the current build for long-term testing on the GigaBlue
 UHD Quad 4K Pro under OpenATV 7.6.0. Everything in the feature
 table works on this hardware. The pool has survived multiple
 parallel recordings + PiP + rapid-fire zapping for hours without a

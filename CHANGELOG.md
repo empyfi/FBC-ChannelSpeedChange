@@ -3,6 +3,38 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.1] - 2026-06-06
+
+### Changed
+- Pool re-arm collapses the HISTORY slot when its target converges
+  with NEXT or PREV. During linear bouquet walking the just-departed
+  channel ends up on the HISTORY slot AND on the opposite-direction
+  neighbour slot (PREV when walking Channel ↑, NEXT when walking
+  Channel ↓), producing a redundant dvbapi subscription on the same
+  service. The pool now detects the collision at arm time and skips
+  arming HISTORY in that case. A recall after a skipped HISTORY still
+  HITs because the pool's lookup is role-independent: it walks every
+  armed slot and returns the first key-matching one, so the surviving
+  PREV / NEXT slot answers the recall via channel-sharing.
+
+  Measured on the test bench (HD+ Nagra Aladin via OSCam, all three
+  prewarm_descrambler toggles on, mixed FTA/HD+ bouquet): card ECM
+  rate −7 %, p95 ECM round-trip −22 % (722 ms vs 923 ms), card-stress
+  events (RTT > 500 ms) −27 %. Walk and recall HIT rate unchanged
+  (12/12 walk, 6/6 recall in the validation run). Median RTT stays at
+  the hardware-bound 376 ms; the gain is concentrated in the tail.
+
+### Notes
+- The optimisation is silent for users without descrambler-prewarm
+  enabled (HISTORY with `descramble=False` was harmless duplicate
+  bookkeeping; nothing on the wire to save). It pays off specifically
+  for cardsharing setups and single-decode CAMs with one or more
+  `prewarm_descrambler_*` toggles on, where the redundant ECM stream
+  was real card load.
+- No new C-binding surface: the change is a Python-side predicate
+  before `_kick_real_tune`, comparing service-reference keys via the
+  predictor's existing `_key()` normalisation (rename-safe).
+
 ## [0.4.0] - 2026-05-31
 
 ### Changed
