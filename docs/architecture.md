@@ -185,11 +185,14 @@ The three slots are mechanically symmetric. Each slot:
 * when re-armed to a new target, produces at most one fresh
   descrambler-init ECM round-trip for that new target.
 
-So with all three toggles on, parallel-decode count is 3 + 1
-(live) and the ECM rate is the sum of four continuous sessions.
-With one toggle on, it is 1 + 1. There is no per-zap penalty
-that distinguishes HISTORY from NEXT or PREV; the only
-asymmetry is *which service* each slot ends up holding.
+So with all three toggles on, parallel-decode count peaks at
+3 + 1 (live) and the ECM rate is the sum of up to four continuous
+sessions; during a steady linear bouquet walk the convergence
+skip drops HISTORY, so the walking case settles at 2 + 1 / three
+continuous sessions. With one toggle on, it is 1 + 1 regardless
+of zap pattern. There is no per-zap penalty that distinguishes
+HISTORY from NEXT or PREV; the only asymmetry is *which service*
+each slot ends up holding.
 
 Each direction tracks a specific user action:
 

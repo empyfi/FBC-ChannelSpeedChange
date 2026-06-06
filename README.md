@@ -93,7 +93,7 @@ hardware.
   `fallocate(PUNCH_HOLE | KEEP_SIZE)` so the throwaway pre-tune
   `.ts` files do not balloon RAM
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (44 tests at the time of writing)
+  unit-tested off-box (56 tests at the time of writing)
 
 ## Measured performance
 
