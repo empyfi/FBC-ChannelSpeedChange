@@ -18,10 +18,6 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 - The setup descriptor now lives in `setup.xml` alongside the
   plugin's Python sources. Each entry carries a `description`
   attribute the host renders in the help panel.
-- The German labels of the three Pay-TV descrambler toggles were
-  renamed from "Descrambler beim … aktivieren" to
-  "Entschlüsselung aktivieren beim …" to better match end-user
-  vocabulary.
 
 ### Added
 - Five visual group headers in the settings list (Plugin,
