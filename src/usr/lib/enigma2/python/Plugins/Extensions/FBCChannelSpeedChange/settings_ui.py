@@ -10,9 +10,9 @@ Inheriting Setup gives the plugin three things for free:
   * action-map wiring (red/green/menu/back) inherited from Setup so
     this module does not duplicate the button plumbing.
 
-The only override is `keySave`: after `Setup.saveAll()` writes the
-new values out, the controller is notified so a running session
-picks them up without an enigma2 restart.
+The only override is `keySave`: the live controller is notified
+before delegating to the parent's full save+close path so a running
+session picks the new values up without an enigma2 restart.
 """
 
 from . import _
@@ -55,20 +55,21 @@ try:
             self.setTitle(_("FBC ChannelSpeedChange"))
 
         def keySave(self):
-            # Persist whatever the user touched. saveAll() returns False
-            # if a value is still being edited (rare for ConfigYesNo) -
-            # in that case Setup itself leaves the screen open.
-            try:
-                if not self.saveAll():
-                    return
-            except AttributeError:
-                # Very old Setup builds expose only `.save()` on the
-                # individual configs without a saveAll() helper.
-                for _label, element in self["config"].list:
-                    element.save()
-
             # Re-arm the live controller with the new toggles so the
-            # user sees the change without restarting enigma2.
+            # user sees the change without restarting enigma2. Runs
+            # *before* the parent's keySave because Setup.keySave
+            # closes the screen on the happy path, and once closed
+            # this instance is gone.
+            #
+            # The parent's keySave is the canonical save+close+restart-
+            # prompt path: it calls saveAll() (which returns an empty
+            # tuple on a normal save, or a (QUIT_RESTART, ...) /
+            # (QUIT_REBOOT, ...) tuple when an item carries the
+            # restart="gui" / restart="system" attribute). Our
+            # setup.xml uses neither marker, so saveAll() always
+            # returns () here, and Setup.keySave() falls through to
+            # self.close(). Delegating keeps that behaviour intact
+            # while still firing the controller hook.
             try:
                 from .controller import Controller
                 ctrl = Controller.peek()
@@ -76,8 +77,7 @@ try:
                     ctrl.on_config_changed()
             except Exception as exc:
                 error("on_config_changed crashed (caught): %r" % exc)
-
-            self.close(True)
+            Setup.keySave(self)
 
 except Exception:
     # Off-box (tests) or enigma2 build without Screens.Setup: the

@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.3] - 2026-06-09
+
+### Fixed
+- Settings screen: the green button did not close the screen
+  after a save. The v0.4.2 `keySave` override misread the return
+  value of `ConfigListScreen.saveAll()` — `saveAll` returns an
+  empty tuple `()` on a normal successful save (not a boolean),
+  so `if not self.saveAll(): return` short-circuited and the
+  follow-up close path never ran. Visible to the user as "green
+  does nothing"; values were still written to
+  `/etc/enigma2/settings` (saveAll completes its writes before
+  returning) but the screen stayed open and the live controller
+  was not notified.
+
+  `keySave` now fires the `controller.on_config_changed()` hook
+  and delegates the actual save+close to the parent's
+  `Setup.keySave()`. As a side benefit the inherited path also
+  honours `restart="gui"` / `restart="system"` attributes on
+  `<item>` rows (no current `setup.xml` row uses either, but it
+  is the correct shape if a future toggle ever needs it).
+
 ## [0.4.2] - 2026-06-09
 
 ### Changed
