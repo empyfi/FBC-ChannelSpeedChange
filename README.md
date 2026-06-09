@@ -199,7 +199,7 @@ just landed):
 
 ```sh
 ssh root@<your-box>
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.4.1/enigma2-plugin-extensions-fbc-channelspeedchange_0.4.1_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.4.2/enigma2-plugin-extensions-fbc-channelspeedchange_0.4.2_all.ipk -O /tmp/fbc.ipk
 opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
@@ -240,21 +240,50 @@ box; autotools is for distribution maintainers.
 
 ## Settings
 
-| Key | Default | Notes |
+Reached via the OpenATV plugin browser. The setup screen is grouped
+into five sections; the descriptions below are the same texts the
+help panel shows when scrolling through the on-box screen.
+
+### Plugin
+
+| Key | Default | Description |
 |---|---|---|
-| Enable plugin | yes | Master enable. Off means full hands-off, no wrapping. |
-| Allow tuner allocation | yes | Belt-and-suspenders kill-switch. Off freezes the pool empty; nothing touches `recordService`. Useful if you suspect the plugin and want to disprove it without uninstalling. |
-| Use real pre-tune | yes | When yes, runs the full prepare()+start() path that gives the actual speedup. When no, the plugin holds idle recordable handles only (no real benefit). |
-| Pre-tune NEXT channel | yes | Reserves one demodulator that stays locked to the next channel in the bouquet. |
-| Pre-tune PREVIOUS channel | yes | Same for the previous bouquet entry. |
-| Pre-tune LAST channel (history) | yes | Reserves one demodulator for the most recently watched service, so History Zap (or the top entry of the history selector) becomes instant. |
-| Activate descrambler in NEXT pay-TV pre-tune | no | When yes, the descrambler engages on the NEXT pre-tune so a Channel ↑ press into a pay-TV channel skips the ~400 ms black frame. Off by default. Adds one continuous extra descrambler session that holds the next-in-bouquet channel. |
-| Activate descrambler in PREVIOUS pay-TV pre-tune | no | Same for the PREVIOUS pre-tune. Adds one continuous extra descrambler session that holds the previous-in-bouquet channel. HITs a Channel ↓ press into pay-TV. |
-| Activate descrambler in LAST pay-TV pre-tune (history) | no | Same for the LAST/history pre-tune. Adds one continuous extra descrambler session that holds the most recently watched non-live channel. HITs the last-channel button and the top entry of the history selector. |
-| Release demods on recording | yes | Pool gives up demodulators the moment a recording enters STATE_PREPARED, ahead of the recorder needing them. |
-| Release demods on PiP | yes | Same idea for PiP. |
-| Show zap latency OSD | no | When yes, flashes the per-zap latency in milliseconds (colour-coded) in the top-right corner for 1.5 s. Off by default so it never surprises anyone on upgrade. |
-| Verbose debug logging | no | Pipes diagnostic dumps and per-zap wrapper noise into `/tmp/fbc_csc.log`. Off in production. |
+| Enable plugin | yes | Master on/off for the plugin. Off: no zap acceleration at all. |
+| Allow tuner allocation (master safety) | yes | Safety brake. Off lets the plugin keep running but blocks every tuner reservation. Zap-Duration overlay active. |
+| Use real pre-tune (prepare+start, faster) | yes | On: the plugin actually reserves tuners — this is where the speedup comes from. Off: dry-run mode without touching tuners. |
+
+### Resource release
+
+| Key | Default | Description |
+|---|---|---|
+| Release demods when recording starts | yes | Frees up all reserved tuners the moment a recording starts, so the recording always gets a tuner. Leave on unless this box never records. |
+| Release demods when PiP starts | yes | Frees up all reserved tuners when Picture-in-Picture is opened, so PiP always gets a tuner. |
+
+### Zap acceleration
+
+| Key | Default | Description |
+|---|---|---|
+| Pre-tune NEXT channel | yes | Sets a tuner to be reserved for the next channel in the bouquet. If yes, fast Zap when Channel Up. |
+| Pre-tune PREVIOUS channel | yes | Sets a tuner to be reserved for the previous channel in the bouquet. If yes, fast Zap when Channel Down. |
+| Pre-tune LAST channel (history) | yes | Sets a tuner to be reserved for the recently watched channel in the bouquet. If yes, fast Zap when tuning to recently watched channel. |
+
+### Pay-TV
+
+Default off for every direction — see the dedicated "Pay-TV
+channels" section below for the full mechanic and trade-offs.
+
+| Key | Default | Description |
+|---|---|---|
+| Activate descrambler in NEXT pay-TV pre-tune | no | Only for Pay-TV channels after Channel Up: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
+| Activate descrambler in PREVIOUS pay-TV pre-tune | no | Only for Pay-TV channels after Channel Down: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
+| Activate descrambler in LAST pay-TV pre-tune (history) | no | Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
+
+### Diagnostics
+
+| Key | Default | Description |
+|---|---|---|
+| Show zap latency OSD | no | Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow). |
+| Verbose debug logging | no | Writes detailed traces to `/tmp/fbc_csc.log`. Only useful for bug reports — leave off in normal use. |
 
 ## How it works
 
@@ -619,7 +648,7 @@ The plugin itself never touches the softcam directly.
 
 ## Project status
 
-v0.4.1 is the current build for long-term testing on the GigaBlue
+v0.4.2 is the current build for long-term testing on the GigaBlue
 UHD Quad 4K Pro under OpenATV 7.6.0. Everything in the feature
 table works on this hardware. The pool has survived multiple
 parallel recordings + PiP + rapid-fire zapping for hours without a

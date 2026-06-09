@@ -3,6 +3,54 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.2] - 2026-06-09
+
+### Changed
+- Settings screen rebuilt on top of `Screens.Setup.Setup`. The
+  previous version pinned an inline 600x400 skin block onto the
+  plugin browser entry; on FHD and 4K image skins (Metrix HD,
+  Gradient FHD, …) that produced a tiny floating window with
+  truncated labels and skin-incompatible button graphics. The new
+  setup screen inherits whatever Setup skin the active image
+  provides: title bar, scrollable config list on the left, blue
+  description panel on the right, button row at the bottom.
+  Layout-correct from default skin up to 4K skin builds.
+- The setup descriptor now lives in `setup.xml` alongside the
+  plugin's Python sources. Each entry carries a `description`
+  attribute the host renders in the help panel.
+- The German labels of the three Pay-TV descrambler toggles were
+  renamed from "Descrambler beim … aktivieren" to
+  "Entschlüsselung aktivieren beim …" to better match end-user
+  vocabulary.
+
+### Added
+- Five visual group headers in the settings list (Plugin,
+  Resource release, Zap acceleration, Pay-TV, Diagnostics)
+  rendered via the official Setup separator pattern - an
+  `<item text="── … ──"></item>` row with no inner config
+  binding. Setup interprets the empty inner-text as a non-
+  selectable header label and skips the help-panel render for
+  that row.
+- Three-line plugin intro at the top of the settings list,
+  summarising what the plugin does and pointing at the GitHub
+  repository for details.
+
+### Notes
+- No behaviour changes to the controller, pool, predictor,
+  arbiter or interceptor. `config.py` is unchanged; the 13
+  `ConfigYesNo` toggles persist identically to v0.4.1. The
+  release is a pure presentation-layer rebuild.
+- Full functional verification of every toggle on the test bench
+  (GigaBlue UHD Quad 4K Pro, OpenATV 7.6.0). Phase 1 (auto):
+  14 single-toggle smoke runs with `init 4 / init 3` between
+  each, verified via `/tmp/fbc_csc.log`, pool slot inventory,
+  and persisted-settings check. Phase 2 (webif-driven): live
+  triggers for `release_for_recording`, `show_osd_timing`, and
+  an OSCam-`ecmhistory` snapshot for the three
+  `prewarm_descrambler_*` flags. Phase 3 (manual remote):
+  `release_for_pip` confirmed via two PiP open/close cycles.
+  13 / 13 PASS, no regressions, no Pay-TV side effects.
+
 ## [0.4.1] - 2026-06-06
 
 ### Changed

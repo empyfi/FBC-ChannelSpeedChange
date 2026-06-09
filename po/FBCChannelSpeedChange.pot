@@ -5,9 +5,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: FBCChannelSpeedChange 0.4.0\n"
+"Project-Id-Version: FBCChannelSpeedChange 0.4.2\n"
 "Report-Msgid-Bugs-To: https://github.com/empyfi/FBC-ChannelSpeedChange/issues\n"
-"POT-Creation-Date: 2026-05-21 12:00+0000\n"
+"POT-Creation-Date: 2026-06-08 14:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,56 +21,140 @@ msgid ""
 "last-watched channel on free FBC tuners."
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Accelerates channel zapping on receivers with FBC (Full Band Capture) tuners,"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "with safe Pay-TV options. Makes channel zapping up to 11x faster!"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "See https://github.com/empyfi/FBC-ChannelSpeedChange for details."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "── Plugin ──"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "── Resource release ──"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "── Zap acceleration ──"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "── Pay-TV ──"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "── Diagnostics ──"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Enable plugin"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Master on/off for the plugin. Off: no zap acceleration at all."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Allow tuner allocation (master safety)"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Safety brake. Off lets the plugin keep running but blocks every tuner reservation. Zap-Duration overlay active."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Use real pre-tune (prepare+start, faster)"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-tune NEXT channel"
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "On: the plugin actually reserves tuners - this is where the speedup comes from. Off: dry-run mode without touching tuners."
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-tune PREVIOUS channel"
-msgstr ""
-
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Pre-tune LAST channel (history)"
-msgstr ""
-
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Activate descrambler in NEXT pay-TV pre-tune"
-msgstr ""
-
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
-msgstr ""
-
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
-msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
-msgstr ""
-
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Release demods when recording starts"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Frees up all reserved tuners the moment a recording starts, so the recording always gets a tuner. Leave on unless this box never records."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Release demods when PiP starts"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Frees up all reserved tuners when Picture-in-Picture is opened, so PiP always gets a tuner."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Pre-tune NEXT channel"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Sets a tuner to be reserved for the next channel in the bouquet. If yes, fast Zap when Channel Up."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Pre-tune PREVIOUS channel"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Sets a tuner to be reserved for the previous channel in the bouquet. If yes, fast Zap when Channel Down."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Pre-tune LAST channel (history)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Sets a tuner to be reserved for the recently watched channel in the bouquet. If yes, fast Zap when tuning to recently watched channel."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Activate descrambler in NEXT pay-TV pre-tune"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Only for Pay-TV channels after Channel Up: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Only for Pay-TV channels after Channel Down: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Show zap latency OSD"
 msgstr ""
 
-#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow)."
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
 msgid "Verbose debug logging"
+msgstr ""
+
+#: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/setup.xml
+msgid "Writes detailed traces to /tmp/fbc_csc.log. Only useful for bug reports - leave off in normal use."
 msgstr ""
 
 #: src/usr/lib/enigma2/python/Plugins/Extensions/FBCChannelSpeedChange/settings_ui.py

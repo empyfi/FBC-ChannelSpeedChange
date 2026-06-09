@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Setup descriptor consumed by Screens.Setup.Setup. Each <item>
+    surfaces as a row in the config list; rows without an inner-text
+    (no `config.*` reference, just a `text` attribute) are rendered
+    by the Setup base class as non-selectable header rows - that is
+    the official mechanism for visually grouping a setup screen.
+
+    Layout:
+      * Leading intro row carries a short plugin description.
+      * Five logical groups, each preceded by a "── … ──" header.
+-->
+<setupxml>
+  <setup key="FBCChannelSpeedChange" title="FBC ChannelSpeedChange">
+
+    <item text="Accelerates channel zapping on receivers with FBC (Full Band Capture) tuners,"></item>
+    <item text="with safe Pay-TV options. Makes channel zapping up to 11x faster!"></item>
+    <item text="See https://github.com/empyfi/FBC-ChannelSpeedChange for details."></item>
+
+    <item text="── Plugin ──"></item>
+
+    <item text="Enable plugin"
+          description="Master on/off for the plugin. Off: no zap acceleration at all.">config.plugins.fbc_csc.enabled</item>
+
+    <item text="Allow tuner allocation (master safety)"
+          description="Safety brake. Off lets the plugin keep running but blocks every tuner reservation. Zap-Duration overlay active.">config.plugins.fbc_csc.allow_pretune</item>
+
+    <item text="Use real pre-tune (prepare+start, faster)"
+          description="On: the plugin actually reserves tuners - this is where the speedup comes from. Off: dry-run mode without touching tuners.">config.plugins.fbc_csc.use_real_pretune</item>
+
+    <item text="── Resource release ──"></item>
+
+    <item text="Release demods when recording starts"
+          description="Frees up all reserved tuners the moment a recording starts, so the recording always gets a tuner. Leave on unless this box never records.">config.plugins.fbc_csc.release_for_recording</item>
+
+    <item text="Release demods when PiP starts"
+          description="Frees up all reserved tuners when Picture-in-Picture is opened, so PiP always gets a tuner.">config.plugins.fbc_csc.release_for_pip</item>
+
+    <item text="── Zap acceleration ──"></item>
+
+    <item text="Pre-tune NEXT channel"
+          description="Sets a tuner to be reserved for the next channel in the bouquet. If yes, fast Zap when Channel Up.">config.plugins.fbc_csc.pretune_next</item>
+
+    <item text="Pre-tune PREVIOUS channel"
+          description="Sets a tuner to be reserved for the previous channel in the bouquet. If yes, fast Zap when Channel Down.">config.plugins.fbc_csc.pretune_prev</item>
+
+    <item text="Pre-tune LAST channel (history)"
+          description="Sets a tuner to be reserved for the recently watched channel in the bouquet. If yes, fast Zap when tuning to recently watched channel.">config.plugins.fbc_csc.pretune_history</item>
+
+    <item text="── Pay-TV ──"></item>
+
+    <item text="Activate descrambler in NEXT pay-TV pre-tune"
+          description="Only for Pay-TV channels after Channel Up: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_next</item>
+
+    <item text="Activate descrambler in PREVIOUS pay-TV pre-tune"
+          description="Only for Pay-TV channels after Channel Down: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_prev</item>
+
+    <item text="Activate descrambler in LAST pay-TV pre-tune (history)"
+          description="Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_history</item>
+
+    <item text="── Diagnostics ──"></item>
+
+    <item text="Show zap latency OSD"
+          description="Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow).">config.plugins.fbc_csc.show_osd_timing</item>
+
+    <item text="Verbose debug logging"
+          description="Writes detailed traces to /tmp/fbc_csc.log. Only useful for bug reports - leave off in normal use.">config.plugins.fbc_csc.debug_log</item>
+
+  </setup>
+</setupxml>

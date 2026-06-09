@@ -1,74 +1,89 @@
-from Screens.Screen import Screen
-from Components.ActionMap import ActionMap
-from Components.ConfigList import ConfigListScreen
-from Components.config import getConfigListEntry
+"""Settings screen wired into the standard Screens.Setup.Setup base.
+
+Inheriting Setup gives the plugin three things for free:
+
+  * the host image's setup skin (Metrix HD, Gradient FHD, OpenATV
+    default, ...) — full HD/4K layout with title bar, config list on
+    the left, description panel on the right, buttons at the bottom;
+  * automatic per-row description text picked from the `description`
+    attribute in `setup.xml`;
+  * action-map wiring (red/green/menu/back) inherited from Setup so
+    this module does not duplicate the button plumbing.
+
+The only override is `keySave`: after `Setup.saveAll()` writes the
+new values out, the controller is notified so a running session
+picks them up without an enigma2 restart.
+"""
 
 from . import _
-from .config import cfg
+from .logger import error
 
 
-class FBCChannelSpeedChangeSetup(ConfigListScreen, Screen):
-    skin = """
-    <screen name="FBCChannelSpeedChangeSetup" position="center,center" size="600,400" title="FBC ChannelSpeedChange">
-        <widget name="config" position="10,10" size="580,340" scrollbarMode="showOnDemand"/>
-        <ePixmap pixmap="skin_default/buttons/red.png" position="10,360" size="140,40" alphatest="blend"/>
-        <ePixmap pixmap="skin_default/buttons/green.png" position="160,360" size="140,40" alphatest="blend"/>
-        <widget name="key_red" position="10,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" zPosition="1" transparent="1"/>
-        <widget name="key_green" position="160,360" size="140,40" font="Regular;20" halign="center" valign="center" foregroundColor="white" backgroundColor="background" zPosition="1" transparent="1"/>
-    </screen>
-    """
+class FBCChannelSpeedChangeSetup(object):
+    """Lightweight wrapper, replaced at import time by the real Setup-
+    derived class below. Kept as a fallback so off-box tests can import
+    this module even when enigma2 is not on the path."""
 
-    def __init__(self, session):
-        Screen.__init__(self, session)
-        self.setTitle("FBC ChannelSpeedChange")
+    pass
 
-        entries = [
-            getConfigListEntry(_("Enable plugin"), cfg.enabled),
-            getConfigListEntry(_("Allow tuner allocation (master safety)"), cfg.allow_pretune),
-            getConfigListEntry(_("Use real pre-tune (prepare+start, faster)"), cfg.use_real_pretune),
-            getConfigListEntry(_("Pre-tune NEXT channel"), cfg.pretune_next),
-            getConfigListEntry(_("Pre-tune PREVIOUS channel"), cfg.pretune_prev),
-            getConfigListEntry(_("Pre-tune LAST channel (history)"), cfg.pretune_history),
-            getConfigListEntry(_("Activate descrambler in NEXT pay-TV pre-tune"), cfg.prewarm_descrambler_next),
-            getConfigListEntry(_("Activate descrambler in PREVIOUS pay-TV pre-tune"), cfg.prewarm_descrambler_prev),
-            getConfigListEntry(_("Activate descrambler in LAST pay-TV pre-tune (history)"), cfg.prewarm_descrambler_history),
-            getConfigListEntry(_("Release demods when recording starts"), cfg.release_for_recording),
-            getConfigListEntry(_("Release demods when PiP starts"), cfg.release_for_pip),
-            getConfigListEntry(_("Show zap latency OSD"), cfg.show_osd_timing),
-            getConfigListEntry(_("Verbose debug logging"), cfg.debug_log),
-        ]
 
-        ConfigListScreen.__init__(self, entries, session=session)
+try:
+    from Screens.Setup import Setup
 
-        from Components.Label import Label
-        self["key_red"] = Label(_("Cancel"))
-        self["key_green"] = Label(_("Save"))
+    class FBCChannelSpeedChangeSetup(Setup):  # noqa: F811 - intentional override
+        def __init__(self, session):
+            # PluginLanguageDomain is honoured on openatv-7.x Setup and
+            # routes _() lookups through the plugin's gettext catalog so
+            # the description texts surface translated. Older Setup
+            # signatures simply do not accept the keyword; fall back to
+            # the minimal call shape in that case.
+            try:
+                Setup.__init__(
+                    self,
+                    session,
+                    setup="FBCChannelSpeedChange",
+                    plugin="Extensions/FBCChannelSpeedChange",
+                    PluginLanguageDomain="FBCChannelSpeedChange",
+                )
+            except TypeError:
+                Setup.__init__(
+                    self,
+                    session,
+                    setup="FBCChannelSpeedChange",
+                    plugin="Extensions/FBCChannelSpeedChange",
+                )
+            self.setTitle(_("FBC ChannelSpeedChange"))
 
-        self["actions"] = ActionMap(
-            ["SetupActions", "ColorActions"],
-            {
-                "save": self._save,
-                "green": self._save,
-                "cancel": self._cancel,
-                "red": self._cancel,
-                "ok": self._save,
-            },
-            -2,
-        )
+        def keySave(self):
+            # Persist whatever the user touched. saveAll() returns False
+            # if a value is still being edited (rare for ConfigYesNo) -
+            # in that case Setup itself leaves the screen open.
+            try:
+                if not self.saveAll():
+                    return
+            except AttributeError:
+                # Very old Setup builds expose only `.save()` on the
+                # individual configs without a saveAll() helper.
+                for _label, element in self["config"].list:
+                    element.save()
 
-    def _save(self):
-        for _, element in self["config"].list:
-            element.save()
-        from .controller import Controller
-        ctrl = Controller.peek()
-        if ctrl is not None:
-            ctrl.on_config_changed()
-        self.close(True)
+            # Re-arm the live controller with the new toggles so the
+            # user sees the change without restarting enigma2.
+            try:
+                from .controller import Controller
+                ctrl = Controller.peek()
+                if ctrl is not None:
+                    ctrl.on_config_changed()
+            except Exception as exc:
+                error("on_config_changed crashed (caught): %r" % exc)
 
-    def _cancel(self):
-        for _, element in self["config"].list:
-            element.cancel()
-        self.close(False)
+            self.close(True)
+
+except Exception:
+    # Off-box (tests) or enigma2 build without Screens.Setup: the
+    # plugin keeps loading, but the settings screen is unreachable.
+    # The plugin.open_setup wrapper already catches and logs that.
+    pass
 
 
 def open_setup(session, **kwargs):

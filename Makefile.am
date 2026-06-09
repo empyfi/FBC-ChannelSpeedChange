@@ -24,7 +24,7 @@ PLUGIN_PY = \
 
 PLUGIN_DATA = \
     plugin.png \
-    setup_fbc_csc.xml
+    setup.xml
 
 install-data-local:
 	$(MKDIR_P) "$(DESTDIR)$(pluginsdir)"
@@ -73,4 +73,4 @@ EXTRA_DIST += \
     $(PLUGIN_PATH)/settings_ui.py \
     $(PLUGIN_PATH)/zap_interceptor.py \
     $(PLUGIN_PATH)/plugin.png \
-    $(PLUGIN_PATH)/setup_fbc_csc.xml
+    $(PLUGIN_PATH)/setup.xml

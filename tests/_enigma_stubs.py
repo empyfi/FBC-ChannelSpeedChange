@@ -33,6 +33,17 @@ def _build_components_config():
             super().__init__(default)
             self.limits = limits
 
+    class ConfigNothing:
+        """Non-editable placeholder used by setup.xml group separators."""
+
+        value = None
+
+        def save(self):
+            pass
+
+        def cancel(self):
+            pass
+
     class ConfigSubsection:
         pass
 
@@ -47,6 +58,7 @@ def _build_components_config():
     cfg_mod.ConfigSubsection = ConfigSubsection
     cfg_mod.ConfigYesNo = ConfigYesNo
     cfg_mod.ConfigInteger = ConfigInteger
+    cfg_mod.ConfigNothing = ConfigNothing
     sys.modules["Components"] = pkg
     sys.modules["Components.config"] = cfg_mod
     return cfg_mod

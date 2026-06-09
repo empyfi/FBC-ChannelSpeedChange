@@ -4,10 +4,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: FBCChannelSpeedChange 0.4.0\n"
+"Project-Id-Version: FBCChannelSpeedChange 0.4.2\n"
 "Report-Msgid-Bugs-To: https://github.com/empyfi/FBC-ChannelSpeedChange/issues\n"
-"POT-Creation-Date: 2026-05-21 12:00+0000\n"
-"PO-Revision-Date: 2026-05-21 12:00+0000\n"
+"POT-Creation-Date: 2026-06-08 12:00+0000\n"
+"PO-Revision-Date: 2026-06-08 14:00+0000\n"
 "Last-Translator: empyfi <empyfi@users.noreply.github.com>\n"
 "Language-Team: German <de@li.org>\n"
 "Language: de\n"
@@ -22,44 +22,123 @@ msgstr ""
 "Beschleunigt das Umschalten, indem der nächste, vorherige und zuletzt "
 "gesehene Sender auf freien FBC-Tunern vorgetunt wird."
 
+# Plugin intro (three lines because Setup renders header rows as
+# single-line labels without wrap; each line stays under ~80 chars
+# so it fits the description column on FHD setup skins).
+msgid "Accelerates channel zapping on receivers with FBC (Full Band Capture) tuners,"
+msgstr "Beschleunigt das Umschalten auf Receivern mit FBC-Tunern (Full Band Capture),"
+
+msgid "with safe Pay-TV options. Makes channel zapping up to 11x faster!"
+msgstr "mit sicheren Pay-TV-Optionen. Bis zu 11x schneller beim Umschalten!"
+
+msgid "See https://github.com/empyfi/FBC-ChannelSpeedChange for details."
+msgstr "Details siehe https://github.com/empyfi/FBC-ChannelSpeedChange"
+
+# Group separators
+msgid "── Plugin ──"
+msgstr "── Plugin ──"
+
+msgid "── Resource release ──"
+msgstr "── Ressourcen freigeben ──"
+
+msgid "── Zap acceleration ──"
+msgstr "── Umschalten beschleunigen ──"
+
+msgid "── Pay-TV ──"
+msgstr "── Pay-TV ──"
+
+msgid "── Diagnostics ──"
+msgstr "── Diagnose ──"
+
+# Group 1: Plugin
+
 msgid "Enable plugin"
 msgstr "Plugin aktivieren"
+
+msgid "Master on/off for the plugin. Off: no zap acceleration at all."
+msgstr "Hauptschalter für das Plugin. Aus: keine Zap-Beschleunigung."
 
 msgid "Allow tuner allocation (master safety)"
 msgstr "Tuner-Belegung erlauben (Hauptschalter)"
 
+msgid "Safety brake. Off lets the plugin keep running but blocks every tuner reservation. Zap-Duration overlay active."
+msgstr "Sicherheitsbremse. Aus lässt das Plugin laufen, blockiert aber jede Tuner-Reservierung. Zap-Dauer wird angezeigt."
+
 msgid "Use real pre-tune (prepare+start, faster)"
 msgstr "Echtes Pre-Tune verwenden (prepare+start, schneller)"
 
-msgid "Pre-tune NEXT channel"
-msgstr "Nächsten Sender vorhalten"
+msgid "On: the plugin actually reserves tuners - this is where the speedup comes from. Off: dry-run mode without touching tuners."
+msgstr "Ein: das Plugin reserviert Tuner wirklich - daher kommt die Beschleunigung. Aus: Trockenlauf ohne Tuner-Zugriff."
 
-msgid "Pre-tune PREVIOUS channel"
-msgstr "Vorherigen Sender vorhalten"
-
-msgid "Pre-tune LAST channel (history)"
-msgstr "Zuletzt gesehenen Sender vorhalten"
-
-msgid "Activate descrambler in NEXT pay-TV pre-tune"
-msgstr "Descrambler beim nächsten Pay-TV-Vorhalten aktivieren"
-
-msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
-msgstr "Descrambler beim vorherigen Pay-TV-Vorhalten aktivieren"
-
-msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
-msgstr "Descrambler beim zuletzt gesehenen Pay-TV-Vorhalten aktivieren"
+# Group 2: Resource release
 
 msgid "Release demods when recording starts"
 msgstr "Tuner freigeben bei Aufnahmestart"
 
+msgid "Frees up all reserved tuners the moment a recording starts, so the recording always gets a tuner. Leave on unless this box never records."
+msgstr "Gibt alle reservierten Tuner sofort frei, sobald eine Aufnahme startet - die Aufnahme bekommt immer einen Tuner. An lassen, außer auf dieser Box wird nie aufgenommen."
+
 msgid "Release demods when PiP starts"
 msgstr "Tuner freigeben bei PiP-Start"
+
+msgid "Frees up all reserved tuners when Picture-in-Picture is opened, so PiP always gets a tuner."
+msgstr "Gibt alle reservierten Tuner frei, sobald Bild-im-Bild geöffnet wird - PiP bekommt immer einen Tuner."
+
+# Group 3: Zap acceleration
+
+msgid "Pre-tune NEXT channel"
+msgstr "Nächsten Sender vorhalten"
+
+msgid "Sets a tuner to be reserved for the next channel in the bouquet. If yes, fast Zap when Channel Up."
+msgstr "Stellt ein, ob ein Tuner für den nächsten Sender im Bouquet reserviert werden soll. Wenn ja, schnelles Umschalten beim Kanal-Hoch."
+
+msgid "Pre-tune PREVIOUS channel"
+msgstr "Vorherigen Sender vorhalten"
+
+msgid "Sets a tuner to be reserved for the previous channel in the bouquet. If yes, fast Zap when Channel Down."
+msgstr "Stellt ein, ob ein Tuner für den vorherigen Sender im Bouquet reserviert werden soll. Wenn ja, schnelles Umschalten beim Kanal-Runter."
+
+msgid "Pre-tune LAST channel (history)"
+msgstr "Zuletzt gesehenen Sender vorhalten"
+
+msgid "Sets a tuner to be reserved for the recently watched channel in the bouquet. If yes, fast Zap when tuning to recently watched channel."
+msgstr "Stellt ein, ob ein Tuner für den zuletzt gesehenen Sender im Bouquet reserviert werden soll. Wenn ja, schnelles Umschalten beim Zap auf den zuletzt gesehenen Kanal."
+
+# Group 4: Pay-TV
+
+msgid "Activate descrambler in NEXT pay-TV pre-tune"
+msgstr "Entschlüsselung aktivieren beim nächsten Pay-TV-Vorhalten"
+
+msgid "Only for Pay-TV channels after Channel Up: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr "Nur bei Pay-TV auf Kanal-Hoch: Aktiviert die Entschlüsselung für den zuständigen Tuner, so dass direkt Bild angezeigt wird (kein kurzer Blackscreen, bis das erste ECM vorliegt). ABER: Verbraucht eine dauerhafte Entschlüsselungs-Session (ECM-Stream), Achtung bei Cardsharing bzw. was die Smartcard/CAM leistet."
+
+msgid "Activate descrambler in PREVIOUS pay-TV pre-tune"
+msgstr "Entschlüsselung aktivieren beim vorherigen Pay-TV-Vorhalten"
+
+msgid "Only for Pay-TV channels after Channel Down: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr "Nur bei Pay-TV auf Kanal-Runter: Aktiviert die Entschlüsselung für den zuständigen Tuner, so dass direkt Bild angezeigt wird (kein kurzer Blackscreen, bis das erste ECM vorliegt). ABER: Verbraucht eine dauerhafte Entschlüsselungs-Session (ECM-Stream), Achtung bei Cardsharing bzw. was die Smartcard/CAM leistet."
+
+msgid "Activate descrambler in LAST pay-TV pre-tune (history)"
+msgstr "Entschlüsselung aktivieren beim zuletzt gesehenen Pay-TV-Vorhalten"
+
+msgid "Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr "Nur bei Pay-TV auf der Zurück-Taste: Aktiviert die Entschlüsselung für den zuständigen Tuner, so dass direkt Bild angezeigt wird (kein kurzer Blackscreen, bis das erste ECM vorliegt). ABER: Verbraucht eine dauerhafte Entschlüsselungs-Session (ECM-Stream), Achtung bei Cardsharing bzw. was die Smartcard/CAM leistet."
+
+# Group 5: Diagnostics
 
 msgid "Show zap latency OSD"
 msgstr "Umschaltzeit am Bildschirm anzeigen"
 
+msgid "Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow)."
+msgstr "Zeigt nach jedem Umschalten eine kleine Anzeige mit der gemessenen Schaltzeit in Millisekunden (grün = schnell, rot = langsam)."
+
 msgid "Verbose debug logging"
 msgstr "Ausführliches Debug-Log"
+
+msgid "Writes detailed traces to /tmp/fbc_csc.log. Only useful for bug reports - leave off in normal use."
+msgstr "Schreibt ausführliche Spuren nach /tmp/fbc_csc.log. Nur für Bug-Reports nützlich - im Normalbetrieb aus lassen."
+
+# Cancel / Save buttons (used by Setup base class and the legacy popup)
 
 msgid "Cancel"
 msgstr "Abbrechen"
