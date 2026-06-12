@@ -16,15 +16,17 @@ Usage:
     python tools/bump_release_urls.py --check
 
 The "from" version is derived from the docs themselves (the version
-the existing release URLs point at). CONTROL/control and the Makefile
-are never written to by this script. The two are deliberately
-decoupled so the bump can be invoked at any point in the release
-flow regardless of whether CONTROL/control has already been bumped.
+the existing release URLs point at). CONTROL/control, the Makefile
+and the plugin package's ``__init__.py`` (``__version__``) are never
+written to by this script. The three are deliberately decoupled so
+the bump can be invoked at any point in the release flow regardless
+of whether the source-side version files have already been bumped.
 
 `--check` exits 1 if the documentation contains a release URL or
 current-build sentence that does not match the version recorded in
-CONTROL/control (and Makefile, which must agree). Intended for use
-in CI / pre-tag verification.
+CONTROL/control (which must agree with the Makefile and with the
+plugin package's ``__version__``). Intended for use in CI / pre-tag
+verification.
 """
 
 import argparse
@@ -65,15 +67,30 @@ def read_makefile_version():
     raise SystemExit("Makefile: no VERSION := line found")
 
 
+def read_init_version():
+    path = os.path.join(
+        REPO_ROOT,
+        "src", "usr", "lib", "enigma2", "python", "Plugins", "Extensions",
+        "FBCChannelSpeedChange", "__init__.py",
+    )
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            m = re.match(r'^__version__\s*=\s*[\'"]([^\'"]+)[\'"]\s*$', line)
+            if m:
+                return m.group(1)
+    raise SystemExit("__init__.py: no __version__ = line found")
+
+
 def current_version():
-    """Return the version both authoritative files agree on, else fail."""
+    """Return the version the three authoritative files agree on, else fail."""
     ctrl = read_control_version()
     mk = read_makefile_version()
-    if ctrl != mk:
+    init = read_init_version()
+    if not (ctrl == mk == init):
         raise SystemExit(
-            "CONTROL/control Version (%s) and Makefile VERSION (%s) "
-            "disagree - reconcile them before bumping doc URLs."
-            % (ctrl, mk)
+            "Version sources disagree - reconcile before bumping doc URLs. "
+            "CONTROL/control Version=%s, Makefile VERSION=%s, "
+            "__init__.py __version__=%s." % (ctrl, mk, init)
         )
     if not VERSION_RE.match(ctrl):
         raise SystemExit("Unexpected version format: %r" % ctrl)

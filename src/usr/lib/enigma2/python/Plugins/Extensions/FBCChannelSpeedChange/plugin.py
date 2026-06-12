@@ -10,7 +10,7 @@ cannot bring down enigma2.
 
 from Plugins.Plugin import PluginDescriptor
 
-from . import _
+from . import _, __version__
 from .logger import info, error
 from .config import PLUGIN_NAME
 
@@ -51,8 +51,10 @@ def open_setup(session, **kwargs):
 
 
 def Plugins(**kwargs):
-    description = _("Accelerates channel zapping by pre-tuning the next, "
-                    "previous and last-watched channel on free FBC tuners.")
+    description = "[v%s] " % __version__ + _(
+        "Accelerates channel zapping by pre-tuning the next, "
+        "previous and last-watched channel on free FBC tuners."
+    )
     return [
         PluginDescriptor(
             name="FBC ChannelSpeedChange",

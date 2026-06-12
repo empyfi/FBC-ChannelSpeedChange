@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.4] - 2026-06-12
+
+### Changed
+- Plugin Browser description now carries the version as a `[vX.Y.Z]`
+  prefix so the OpenATV feed maintainer and forum users can identify
+  the installed build at a glance without opening the Settings UI.
+
+### Added
+- `__version__` constant exposed by the plugin package
+  (`Plugins.Extensions.FBCChannelSpeedChange.__version__`) as the
+  single runtime source of truth for the version string.
+  `tools/bump_release_urls.py --check` now enforces that
+  `CONTROL/control`, `Makefile` and the package's `__version__` all
+  agree before a release goes out.
+
+### Notes
+- Pure presentation-layer change. Controller, pool, predictor,
+  arbiter, interceptor and config behaviour are untouched.
+
 ## [0.4.3] - 2026-06-09
 
 ### Fixed

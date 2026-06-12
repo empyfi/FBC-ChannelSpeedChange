@@ -5,9 +5,18 @@ symbol is exported and used throughout the package. When enigma2's
 language infrastructure is unavailable (e.g. unit tests run off-box),
 `_` falls back to an identity function so the package can still be
 imported.
+
+`__version__` is the canonical version string for the plugin package.
+The Plugin Browser entry's description prefixes it so users (and the
+OpenATV feed maintainer) can identify the build at a glance. It must
+stay in sync with `CONTROL/control` and `Makefile` on every release;
+`tools/bump_release_urls.py --check` enforces the three agree.
 """
 
 import os
+
+
+__version__ = "0.4.4"
 
 
 def _(txt):
