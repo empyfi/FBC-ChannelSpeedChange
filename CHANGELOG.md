@@ -7,8 +7,8 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - Plugin Browser description now carries the version as a `[vX.Y.Z]`
-  prefix so the OpenATV feed maintainer and forum users can identify
-  the installed build at a glance without opening the Settings UI.
+  prefix so the users can identify  the installed build at a glance
+  without opening the Settings UI.
 
 ### Added
 - `__version__` constant exposed by the plugin package
