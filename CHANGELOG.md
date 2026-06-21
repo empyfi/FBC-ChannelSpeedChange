@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.5.0] - unreleased
+## [0.5.0] - 2026-06-21
 
 ### Added
 - Public Python API at
