@@ -2,6 +2,7 @@ from Components.config import (
     config,
     ConfigSubsection,
     ConfigYesNo,
+    ConfigInteger,
 )
 
 PLUGIN_NAME = "FBCChannelSpeedChange"
@@ -54,6 +55,20 @@ def _initialize():
     cfg.prewarm_descrambler_history = ConfigYesNo(default=False)
     cfg.prewarm_descrambler_next = ConfigYesNo(default=False)
     cfg.prewarm_descrambler_prev = ConfigYesNo(default=False)
+
+    # v0.5.0 external pretune. accept_external_pretune is the master
+    # gate for the public api module (PreTuneSingleChannel /
+    # ReleaseSingleChannel); default False so a fresh install does
+    # nothing unless the user opted in. external_slot_ttl_ms is the
+    # safety-net TTL applied when the caller forgets to send a
+    # release - 5 min is long enough that legitimate EPG-read
+    # sessions never get torn down mid-read. prewarm_descrambler_external
+    # carries the Pay-TV behaviour for the EXTERNAL slot and follows
+    # the same per-direction default-off pattern as the other three.
+    cfg.accept_external_pretune = ConfigYesNo(default=False)
+    cfg.external_slot_ttl_ms = ConfigInteger(
+        default=300000, limits=(10000, 1800000))
+    cfg.prewarm_descrambler_external = ConfigYesNo(default=False)
 
     # Tiny on-screen overlay after every zap, showing the measured
     # latency in ms with a colour cue (green / yellow / orange / red).
