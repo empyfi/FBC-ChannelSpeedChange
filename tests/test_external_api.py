@@ -1,0 +1,153 @@
+"""Tests for the public PreTuneSingleChannel / ReleaseSingleChannel
+entry points.
+
+The api module is a thin pass-through to the controller. Tests here
+verify only the public contract observable from outside:
+  * both gates (allow_pretune, accept_external_pretune) must be on
+  * a missing controller (early boot) is a silent no-op
+  * exceptions raised by the controller are caught, not propagated
+  * the ref argument is routed verbatim to the controller method
+
+The convergence / idempotency logic lives inside the controller and
+is exercised in test_controller_external.py (Phase 3).
+"""
+
+import unittest
+
+from _enigma_stubs import bootstrap
+bootstrap()
+
+# Add the cfg.accept_external_pretune attribute up-front so the
+# tests can flip its .value the same way other tests flip
+# pre-existing config attributes. The real config will gain the
+# entry in Phase 4; this stub is shaped to look identical to a
+# ConfigYesNo instance from the test stubs.
+from FBCChannelSpeedChange.config import cfg as _cfg
+from Components.config import ConfigYesNo
+
+if not hasattr(_cfg, "accept_external_pretune"):
+    _cfg.accept_external_pretune = ConfigYesNo(default=False)
+
+# Master switch must be on for any test to reach the controller path.
+_cfg.allow_pretune.value = True
+
+from FBCChannelSpeedChange import api
+
+
+class FakeRef:
+    def __init__(self, s):
+        self._s = s
+
+    def toString(self):
+        return self._s
+
+
+class FakeController:
+    """Captures the controller surface the api routes into."""
+
+    def __init__(self, pretune_raises=None, release_raises=None):
+        self.pretune_calls = []   # list of refs
+        self.release_calls = []   # list of refs (None when no-arg)
+        self._pretune_raises = pretune_raises
+        self._release_raises = release_raises
+
+    def pretune_external(self, ref):
+        self.pretune_calls.append(ref)
+        if self._pretune_raises:
+            raise self._pretune_raises
+
+    def release_external(self, ref):
+        self.release_calls.append(ref)
+        if self._release_raises:
+            raise self._release_raises
+
+
+class ExternalApiTests(unittest.TestCase):
+
+    def setUp(self):
+        # Reset gates to a known on state and inject a fresh fake
+        # controller per test so cross-test state never leaks.
+        _cfg.allow_pretune.value = True
+        _cfg.accept_external_pretune.value = True
+        self._original_provider = api._controller_provider
+        self.fake = FakeController()
+        api._controller_provider = lambda: self.fake
+
+    def tearDown(self):
+        api._controller_provider = self._original_provider
+        _cfg.accept_external_pretune.value = False
+
+    # ---- gate logic ----
+
+    def test_pretune_no_op_when_master_switch_off(self):
+        _cfg.allow_pretune.value = False
+        try:
+            api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+            self.assertEqual(self.fake.pretune_calls, [])
+        finally:
+            _cfg.allow_pretune.value = True
+
+    def test_pretune_no_op_when_external_gate_off(self):
+        _cfg.accept_external_pretune.value = False
+        api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+        self.assertEqual(self.fake.pretune_calls, [])
+
+    def test_release_no_op_when_master_switch_off(self):
+        _cfg.allow_pretune.value = False
+        try:
+            api.ReleaseSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+            self.assertEqual(self.fake.release_calls, [])
+        finally:
+            _cfg.allow_pretune.value = True
+
+    def test_release_no_op_when_external_gate_off(self):
+        _cfg.accept_external_pretune.value = False
+        api.ReleaseSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+        self.assertEqual(self.fake.release_calls, [])
+
+    # ---- missing controller (early boot) ----
+
+    def test_pretune_silent_when_controller_missing(self):
+        api._controller_provider = lambda: None
+        # Must not raise.
+        api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+
+    def test_release_silent_when_controller_missing(self):
+        api._controller_provider = lambda: None
+        api.ReleaseSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+
+    # ---- happy path routing ----
+
+    def test_pretune_routes_to_controller(self):
+        ref = FakeRef("1:0:1:A:0:0:0:0:0:0:")
+        api.PreTuneSingleChannel(ref)
+        self.assertEqual(self.fake.pretune_calls, [ref],
+                         "exact ref forwarded to controller.pretune_external")
+
+    def test_release_with_ref_routes_to_controller(self):
+        ref = FakeRef("1:0:1:A:0:0:0:0:0:0:")
+        api.ReleaseSingleChannel(ref)
+        self.assertEqual(self.fake.release_calls, [ref])
+
+    def test_release_without_arg_passes_none(self):
+        api.ReleaseSingleChannel()
+        self.assertEqual(self.fake.release_calls, [None],
+                         "no-arg release forwards None - controller "
+                         "treats it as unconditional empty")
+
+    # ---- exception handling ----
+
+    def test_pretune_swallows_controller_exception(self):
+        api._controller_provider = lambda: FakeController(
+            pretune_raises=RuntimeError("boom"))
+        # Must not propagate.
+        api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+
+    def test_release_swallows_controller_exception(self):
+        api._controller_provider = lambda: FakeController(
+            release_raises=RuntimeError("boom"))
+        api.ReleaseSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+
+
+if __name__ == "__main__":
+    unittest.main()
