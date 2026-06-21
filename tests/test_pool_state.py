@@ -411,6 +411,59 @@ class PoolTests(unittest.TestCase):
         pool.arm({Role.NEXT: [FakeRef("1:0:1:A:0:0:0:0:0:0:A")]})
         self.assertEqual(pool._slots_by_role[Role.NEXT][0].state, SlotState.IDLE)
 
+    def test_external_role_configurable_and_armed(self):
+        """Role.EXTERNAL is wired the same way as NEXT/PREV/HISTORY:
+        configure() reserves the bucket, arm() with an EXTERNAL ref
+        allocates a recordable and transitions to TUNING. No new
+        plumbing inside the pool - the role is just another key in
+        the by-role dict.
+        """
+        pool, nav, _ = make_pool()
+        pool.configure({Role.EXTERNAL: 1})
+        self.assertEqual(len(pool._slots_by_role[Role.EXTERNAL]), 1)
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:X")
+        pool.arm({Role.EXTERNAL: [ref]})
+        slot = pool._slots_by_role[Role.EXTERNAL][0]
+        self.assertEqual(slot.state, SlotState.TUNING)
+        self.assertEqual(len(nav.allocations), 1)
+        pool._mark_locked_optimistic(slot)
+        self.assertEqual(slot.state, SlotState.LOCKED)
+
+    def test_external_role_lookup(self):
+        """Lookup is role-agnostic - an EXTERNAL slot answers a hit
+        the same way a NEXT slot would. The interceptor / controller
+        never has to know the slot's role to find a HIT.
+        """
+        pool, _, _ = make_pool()
+        pool.configure({Role.EXTERNAL: 1})
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:X")
+        pool.arm({Role.EXTERNAL: [ref]})
+        pool._mark_locked_optimistic(pool._slots_by_role[Role.EXTERNAL][0])
+        slot = pool.lookup(FakeRef("1:0:1:X:0:0:0:0:0:0:Renamed"))
+        self.assertIsNotNone(slot)
+        self.assertEqual(slot.role, Role.EXTERNAL)
+        self.assertEqual(slot.state, SlotState.LOCKED)
+
+    def test_external_role_release_after_swap(self):
+        """After a HIT on an EXTERNAL slot, release_after_swap brings
+        it back to IDLE and stops the recordable, exactly as for the
+        internal roles. The controller calls this on evNewProgramInfo
+        for the shortcut-zap path; the api's ReleaseSingleChannel
+        triggers the same teardown.
+        """
+        pool, nav, _ = make_pool()
+        pool.configure({Role.EXTERNAL: 1})
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:X")
+        pool.arm({Role.EXTERNAL: [ref]})
+        rec = nav.allocations[0][1]
+        pool._mark_locked_optimistic(pool._slots_by_role[Role.EXTERNAL][0])
+        slot = pool.confirm_hit(FakeRef("1:0:1:X:0:0:0:0:0:0:X"))
+        self.assertIsNotNone(slot)
+        pool.release_after_swap(slot)
+        self.assertEqual(pool._slots_by_role[Role.EXTERNAL][0].state,
+                         SlotState.IDLE)
+        self.assertTrue(rec.stopped)
+
 
 if __name__ == "__main__":
     unittest.main()

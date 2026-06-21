@@ -32,6 +32,13 @@ class Role(Enum):
     NEXT = "next"
     PREV = "prev"
     HISTORY = "history"
+    # Driven by the public api module (Phase 2 onwards). External
+    # callers - currently Oberhesse's FCC-Extender, future native
+    # channel-list hover hook - feed a service reference through
+    # PreTuneSingleChannel and the controller routes it into this
+    # bucket. EXTERNAL never competes with the internal predictor;
+    # NEXT / PREV / HISTORY keep their own capacity.
+    EXTERNAL = "external"
 
 
 class SlotState(Enum):
@@ -282,9 +289,9 @@ class FBCPreTunePool:
     def _direction_descramble(self, role):
         """Per-direction descramble flag for the pre-tune prepare() call.
 
-        Reads cfg.prewarm_descrambler_{history,next,prev} (all default
-        False). Returns False on any lookup error so a corrupted
-        config never accidentally engages the descrambler.
+        Reads cfg.prewarm_descrambler_{history,next,prev,external}
+        (all default False). Returns False on any lookup error so a
+        corrupted config never accidentally engages the descrambler.
         """
         try:
             if role is Role.HISTORY:
@@ -293,6 +300,8 @@ class FBCPreTunePool:
                 return bool(_cfg.prewarm_descrambler_next.value)
             if role is Role.PREV:
                 return bool(_cfg.prewarm_descrambler_prev.value)
+            if role is Role.EXTERNAL:
+                return bool(_cfg.prewarm_descrambler_external.value)
         except Exception:
             pass
         return False
