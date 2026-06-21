@@ -75,16 +75,34 @@ class FccExtenderClassifierTests(unittest.TestCase):
         self.assertIn("installed", label)
         self.assertNotIn("not detected", label)
 
+    def test_vti_version_extracted(self):
+        # When a Package block carries a Version: line, the version is
+        # folded into the rendered label.
+        label = _classify_fccextender_content(_OPKG_STATUS_SAMPLE_VTI)
+        self.assertIn("0.3-Beta", label)
+
     def test_openatv_stem_recognised(self):
         # Anticipated OpenATV-flavoured package name.
         label = _classify_fccextender_content(_OPKG_STATUS_SAMPLE_OPENATV)
         self.assertIn("installed", label)
+
+    def test_openatv_version_extracted(self):
+        label = _classify_fccextender_content(_OPKG_STATUS_SAMPLE_OPENATV)
+        self.assertIn("0.4", label)
 
     def test_hyphen_variant_recognised(self):
         # Whether Oberhesse uses "fccextender" or "fcc-extender" as the
         # stem, the substring match catches both.
         label = _classify_fccextender_content(_OPKG_STATUS_SAMPLE_HYPHEN)
         self.assertIn("installed", label)
+
+    def test_missing_version_line_falls_back_to_bare_label(self):
+        # If the block has no Version: line (unusual but defensive),
+        # the label drops the version suffix rather than crashing.
+        sample = "Package: enigma2-plugin-extensions-fccextender\nStatus: install ok installed\n"
+        label = _classify_fccextender_content(sample)
+        self.assertIn("installed", label)
+        self.assertNotIn("(v", label)
 
     def test_empty_file_returns_not_detected(self):
         label = _classify_fccextender_content("")

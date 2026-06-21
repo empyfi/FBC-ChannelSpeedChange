@@ -124,6 +124,9 @@ msgstr "TTL des externen Slots (Minuten, Sicherheitsnetz)"
 msgid "FCC-Extender: installed"
 msgstr "FCC-Extender: installiert"
 
+msgid "FCC-Extender: installed (v%s)"
+msgstr "FCC-Extender: installiert (v%s)"
+
 msgid "FCC-Extender: not detected"
 msgstr "FCC-Extender: nicht erkannt"
 

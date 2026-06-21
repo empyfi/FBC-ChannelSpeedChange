@@ -29,15 +29,33 @@ _OPKG_STATUS_PATH = "/var/lib/opkg/status"
 def _classify_fccextender_content(content):
     """Classify an opkg-status file body into a human-readable label.
 
+    Parses the file in opkg-status format (Package blocks separated
+    by blank lines, each block carries ``Package:`` and ``Version:``
+    key-value lines). When a ``Package:`` line carries an
+    ``fccextender`` / ``fcc-extender`` stem, the matching
+    ``Version:`` line is folded into the rendered label.
+
     The OpenATV port of the FCC-Extender is not yet published; the
-    VTi build's package name is ``enigma2-plugin-extensions-vti-fccextender``.
-    The OpenATV variant will most likely keep the ``fccextender``
-    stem so a substring match catches whichever exact name lands.
-    Returns the translated label that the setup screen renders
-    under the External pretune group header.
+    VTi build's package name is
+    ``enigma2-plugin-extensions-vti-fccextender``. The OpenATV
+    variant will most likely keep the ``fccextender`` stem so a
+    substring match catches whichever exact name lands.
     """
-    lowered = content.lower()
-    if "fccextender" in lowered or "fcc-extender" in lowered:
+    for block in content.split("\n\n"):
+        package_name = None
+        version = None
+        for line in block.splitlines():
+            if line.startswith("Package:"):
+                package_name = line.split(":", 1)[1].strip()
+            elif line.startswith("Version:"):
+                version = line.split(":", 1)[1].strip()
+        if not package_name:
+            continue
+        lowered = package_name.lower()
+        if "fccextender" not in lowered and "fcc-extender" not in lowered:
+            continue
+        if version:
+            return _("FCC-Extender: installed (v%s)") % version
         return _("FCC-Extender: installed")
     return _("FCC-Extender: not detected")
 
