@@ -50,10 +50,10 @@
     <item text="── External pretune (FCC-Extender) ──"></item>
 
     <item text="Accept external pre-tune calls"
-          description="Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off by default - turn on only when a paired plugin is installed and configured.">config.plugins.fbc_csc.accept_external_pretune</item>
+          description="Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Turn on only when a paired plugin is installed and configured.">config.plugins.fbc_csc.accept_external_pretune</item>
 
     <item text="External slot TTL (minutes, safety net)"
-          description="Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 5 minutes - long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment.">config.plugins.fbc_csc.external_slot_ttl_min</item>
+          description="Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment.">config.plugins.fbc_csc.external_slot_ttl_min</item>
 
     <item text="── Pay-TV ──"></item>
 
@@ -67,7 +67,7 @@
           description="Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_history</item>
 
     <item text="Activate descrambler in external pre-tune"
-          description="Only for Pay-TV channels driven by a companion plugin (FCC-Extender etc.): Activates the descrambler for the EXTERNAL tuner so there is no black frame on the first ECM after switch. BUT: Costs one continuous extra decryption session (ECM stream) while the slot is armed - be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_external</item>
+          description="Only for external Pay-TV pre-tune: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle.">config.plugins.fbc_csc.prewarm_descrambler_external</item>
 
     <item text="── Diagnostics ──"></item>
 

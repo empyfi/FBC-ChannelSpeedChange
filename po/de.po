@@ -112,8 +112,8 @@ msgstr "Stellt ein, ob ein Tuner für den zuletzt gesehenen Sender im Bouquet re
 msgid "Accept external pre-tune calls"
 msgstr "Externe Vorhalte-Aufrufe annehmen"
 
-msgid "Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off by default - turn on only when a paired plugin is installed and configured."
-msgstr "Lässt Begleit-Plugins (z. B. FCC-Extender) eine Sender-Referenz in einen dedizierten EXTERNAL-Slot legen. Standardmäßig aus - nur einschalten, wenn ein passendes Plugin installiert und eingerichtet ist."
+msgid "Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Turn on only when a paired plugin is installed and configured."
+msgstr "Lässt Begleit-Plugins (z. B. FCC-Extender) eine Sender-Referenz in einen dedizierten EXTERNAL-Slot legen. Nur einschalten, wenn ein passendes Plugin installiert und eingerichtet ist."
 
 msgid "External slot TTL (minutes, safety net)"
 msgstr "TTL des externen Slots (Minuten, Sicherheitsnetz)"
@@ -130,8 +130,8 @@ msgstr "FCC-Extender: nicht erkannt"
 msgid "FCC-Extender: status unknown"
 msgstr "FCC-Extender: Status unbekannt"
 
-msgid "Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 5 minutes - long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment."
-msgstr "Gibt den EXTERNAL-Slot automatisch frei, falls der Aufrufer vergisst eine Release-Nachricht zu senden. Standard 5 Minuten - lang genug für normales EPG-Lesen, kurz genug, dass ein vergessener Slot keinen Tuner dauerhaft blockiert. Selten anzupassen."
+msgid "Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment."
+msgstr "Gibt den EXTERNAL-Slot automatisch frei, falls der Aufrufer vergisst eine Release-Nachricht zu senden. Lang genug für normales EPG-Lesen, kurz genug, dass ein vergessener Slot keinen Tuner dauerhaft blockiert. Selten anzupassen."
 
 # Group 5: Pay-TV
 
@@ -156,8 +156,8 @@ msgstr "Nur bei Pay-TV auf der Zurück-Taste: Aktiviert die Entschlüsselung fü
 msgid "Activate descrambler in external pre-tune"
 msgstr "Entschlüsselung aktivieren beim externen Vorhalten"
 
-msgid "Only for Pay-TV channels driven by a companion plugin (FCC-Extender etc.): Activates the descrambler for the EXTERNAL tuner so there is no black frame on the first ECM after switch. BUT: Costs one continuous extra decryption session (ECM stream) while the slot is armed - be aware when cardsharing or what smartcard/CAM can handle."
-msgstr "Nur bei Pay-TV durch ein Begleit-Plugin (FCC-Extender etc.): Aktiviert die Entschlüsselung für den EXTERNAL-Tuner, so dass direkt Bild angezeigt wird (kein kurzer Blackscreen, bis das erste ECM vorliegt). ABER: Verbraucht eine dauerhafte Entschlüsselungs-Session (ECM-Stream) solange der Slot armiert ist - Achtung bei Cardsharing bzw. was die Smartcard/CAM leistet."
+msgid "Only for external Pay-TV pre-tune: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle."
+msgstr "Nur bei externem Pay-TV-Vorhalten: Aktiviert die Entschlüsselung für den zuständigen Tuner, so dass direkt Bild angezeigt wird (kein kurzer Blackscreen, bis das erste ECM vorliegt). ABER: Verbraucht eine dauerhafte Entschlüsselungs-Session (ECM-Stream), Achtung bei Cardsharing bzw. was die Smartcard/CAM leistet."
 
 # Group 6: Diagnostics
 
