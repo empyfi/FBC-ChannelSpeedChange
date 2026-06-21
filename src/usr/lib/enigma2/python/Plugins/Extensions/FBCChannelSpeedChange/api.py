@@ -38,7 +38,7 @@ controller, not here. This module stays a thin pass-through so
 the public contract is observable and testable in isolation.
 """
 
-from .logger import error
+from .logger import debug, error
 from .config import cfg
 
 
@@ -83,6 +83,7 @@ def PreTuneSingleChannel(service_ref):
     c = _controller_provider()
     if c is None:
         return
+    _log_caller("PreTuneSingleChannel", service_ref)
     try:
         c.pretune_external(service_ref)
     except Exception as exc:
@@ -113,6 +114,7 @@ def ReleaseSingleChannel(service_ref=None):
     c = _controller_provider()
     if c is None:
         return
+    _log_caller("ReleaseSingleChannel", service_ref)
     try:
         c.release_external(service_ref)
     except Exception as exc:
@@ -128,6 +130,30 @@ def _is_serviceref(obj):
     that would later raise into the SWIG path.
     """
     return obj is not None and hasattr(obj, "toString")
+
+
+def _log_caller(entry_point, service_ref):
+    """Emit one debug line per public-API call identifying the
+    caller's filename and line. Gated on ``cfg.debug_log`` because
+    ``inspect.stack`` is expensive enough to want to keep out of
+    the hot path on normal runs; the line lets a forum reporter
+    answer "which plugin called us" once the debug toggle is on.
+    """
+    try:
+        if not cfg.debug_log.value:
+            return
+    except Exception:
+        return
+    try:
+        import inspect
+        # [0] this fn, [1] PreTune/ReleaseSingleChannel, [2] actual caller.
+        frame = inspect.stack()[2]
+        ref_str = service_ref.toString() if service_ref is not None else "<None>"
+        debug("%s(%s) called from %s:%d" % (
+            entry_point, ref_str, frame.filename, frame.lineno))
+    except Exception:
+        # Caller inspection is best-effort; never propagate.
+        pass
 
 
 def _gate_open():

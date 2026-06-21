@@ -410,6 +410,117 @@ class ExternalSlotLifecycleTests(unittest.TestCase):
 
     # ---- watchdog isolation ----
 
+    # ---- stats / heartbeat ----
+
+    def test_stats_armed_counter_increments_on_arm(self):
+        c, pool = _make_controller_with_test_pool()
+        c.pretune_external(FakeRef("1:0:1:X:0:0:0:0:0:0:"))
+        self.assertEqual(c._external_stats.calls_armed, 1)
+
+    def test_stats_idempotent_counter_increments_on_repeat(self):
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        c.pretune_external(ref)
+        c.pretune_external(ref)  # repeat within 100 ms -> idempotent
+        self.assertEqual(c._external_stats.calls_idempotent, 1)
+
+    def test_stats_throttled_counter_increments_on_burst(self):
+        c, pool = _make_controller_with_test_pool()
+        _cfg.external_max_calls_per_sec.value = 3
+        try:
+            for i in range(5):
+                c.pretune_external(FakeRef("1:0:1:%d:0:0:0:0:0:0:" % i))
+            self.assertGreater(c._external_stats.calls_throttled, 0,
+                               "throttled counter must reflect drops")
+        finally:
+            _cfg.external_max_calls_per_sec.value = 10
+
+    def test_stats_convergence_skip_counter(self):
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        pool.arm({Role.NEXT: [ref]})
+        pool._mark_locked_optimistic(pool._slots_by_role[Role.NEXT][0])
+        c.pretune_external(ref)
+        self.assertEqual(c._external_stats.calls_convergence_skip, 1)
+
+    def test_stats_explicit_release_counter(self):
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        c.pretune_external(ref)
+        c.release_external(ref)
+        self.assertEqual(c._external_stats.releases_explicit, 1)
+
+    def test_stats_evnewproginfo_release_counter(self):
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        c.pretune_external(ref)
+        c._wire_evnewproginfo()
+        _FAKE_NAV._live_ref = ref
+        from enigma import iPlayableService
+        c._on_nav_event(iPlayableService.evNewProgramInfo)
+        self.assertEqual(c._external_stats.releases_via_evnewproginfo, 1)
+        self.assertEqual(c._external_stats.releases_explicit, 0,
+                         "evNewProgramInfo path must NOT count as "
+                         "an explicit release")
+
+    def test_stats_ttl_release_counter(self):
+        c, pool = _make_controller_with_test_pool()
+        c.pretune_external(FakeRef("1:0:1:X:0:0:0:0:0:0:"))
+        c._handle_external_ttl()
+        self.assertEqual(c._external_stats.releases_via_ttl, 1)
+        self.assertEqual(c._external_stats.releases_explicit, 0,
+                         "TTL path must NOT count as an explicit "
+                         "release (the controller bookkeeping "
+                         "compensates for release_external itself "
+                         "crediting explicit)")
+
+    def test_stats_format_carries_key_terms(self):
+        c, pool = _make_controller_with_test_pool()
+        c.pretune_external(FakeRef("1:0:1:X:0:0:0:0:0:0:"))
+        line = c._external_stats.format()
+        # Forum reporters grep on these terms - keep them stable.
+        for token in ("external stats", "calls", "armed", "throttled",
+                      "TTL refreshes", "releases"):
+            self.assertIn(token, line)
+
+    def test_stats_reset_zeroes_everything(self):
+        c, pool = _make_controller_with_test_pool()
+        c.pretune_external(FakeRef("1:0:1:X:0:0:0:0:0:0:"))
+        self.assertTrue(c._external_stats.has_activity())
+        c._external_stats.reset()
+        self.assertFalse(c._external_stats.has_activity())
+
+    def test_flush_no_op_on_quiet_minute(self):
+        c, pool = _make_controller_with_test_pool()
+        captured = []
+        import FBCChannelSpeedChange.controller as ctrl
+        original = ctrl.info
+        ctrl.info = lambda msg: captured.append(msg)
+        try:
+            c._flush_external_stats()
+        finally:
+            ctrl.info = original
+        self.assertEqual(captured, [],
+                         "no activity -> no info line, keeps the log "
+                         "clean on idle minutes")
+
+    def test_flush_emits_summary_when_active(self):
+        c, pool = _make_controller_with_test_pool()
+        c.pretune_external(FakeRef("1:0:1:X:0:0:0:0:0:0:"))
+        captured = []
+        import FBCChannelSpeedChange.controller as ctrl
+        original = ctrl.info
+        ctrl.info = lambda msg: captured.append(msg)
+        try:
+            c._flush_external_stats()
+        finally:
+            ctrl.info = original
+        self.assertTrue(
+            any("external stats" in m for m in captured),
+            "active minute -> one info summary line")
+
+    # ---- watchdog isolation ----
+
     def test_external_failure_does_not_increment_watchdog(self):
         """A pretune_external that raises inside the controller must
         not bump _consecutive_failures. The watchdog protects

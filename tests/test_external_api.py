@@ -175,6 +175,42 @@ class ExternalApiTests(unittest.TestCase):
         api.ReleaseSingleChannel(None)
         self.assertEqual(self.fake.release_calls, [None])
 
+    # ---- caller-frame diagnostic (debug_log mode) ----
+
+    def test_caller_frame_logged_when_debug_log_on(self):
+        """With cfg.debug_log on, the api logs the caller's
+        filename:line so a forum reporter can answer "which plugin
+        called us" when something goes wrong.
+        """
+        _cfg.debug_log.value = True
+        captured = []
+        original = api.debug
+        api.debug = lambda msg: captured.append(msg)
+        try:
+            api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+        finally:
+            api.debug = original
+            _cfg.debug_log.value = False
+        self.assertTrue(
+            any("PreTuneSingleChannel" in m and "called from" in m
+                for m in captured),
+            "expected a 'PreTuneSingleChannel(...) called from ...' "
+            "debug line, got: %r" % captured)
+
+    def test_caller_frame_not_logged_when_debug_log_off(self):
+        _cfg.debug_log.value = False
+        captured = []
+        original = api.debug
+        api.debug = lambda msg: captured.append(msg)
+        try:
+            api.PreTuneSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
+        finally:
+            api.debug = original
+        self.assertFalse(
+            any("called from" in m for m in captured),
+            "caller-frame must stay out of the log when debug_log "
+            "is off (avoid inspect.stack cost on hot path)")
+
 
 if __name__ == "__main__":
     unittest.main()

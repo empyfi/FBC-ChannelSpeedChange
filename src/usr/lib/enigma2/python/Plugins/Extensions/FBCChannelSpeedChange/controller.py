@@ -10,6 +10,7 @@ one Controller per enigma2 session.
 """
 
 import time
+import traceback
 
 from . import _
 from .logger import info, debug, warn, error
@@ -83,6 +84,59 @@ class _ExternalRateLimiter:
         self._drops_since_warn = 0
         self._last_warn_ns = now_ns
         return count
+
+
+class _ExternalStats:
+    """Rolling 60-second activity counters for the external slot.
+
+    Bumped by the controller on every external-call verdict, every
+    TTL refresh, every release path. A heartbeat eTimer fires
+    ``flush_if_active()`` at info level once per minute, providing
+    a forensic summary that a forum reporter can paste alongside a
+    bug report. Quiet minutes (no activity) emit nothing.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.calls_armed = 0
+        self.calls_idempotent = 0
+        self.calls_convergence_skip = 0
+        self.calls_throttled = 0
+        self.calls_errors = 0
+        self.ttl_refreshes = 0
+        self.releases_explicit = 0
+        self.releases_via_evnewproginfo = 0
+        self.releases_via_ttl = 0
+
+    @property
+    def calls_total(self):
+        return (self.calls_armed + self.calls_idempotent
+                + self.calls_convergence_skip + self.calls_throttled
+                + self.calls_errors)
+
+    @property
+    def releases_total(self):
+        return (self.releases_explicit + self.releases_via_evnewproginfo
+                + self.releases_via_ttl)
+
+    def has_activity(self):
+        return self.calls_total > 0 or self.releases_total > 0
+
+    def format(self):
+        return (
+            "external stats (60s): %d calls (%d armed, %d idempotent, "
+            "%d convergence-skip, %d throttled, %d errors), TTL "
+            "refreshes %d, releases %d (%d explicit, %d evNewProgramInfo, "
+            "%d TTL)" % (
+                self.calls_total, self.calls_armed, self.calls_idempotent,
+                self.calls_convergence_skip, self.calls_throttled,
+                self.calls_errors, self.ttl_refreshes,
+                self.releases_total, self.releases_explicit,
+                self.releases_via_evnewproginfo, self.releases_via_ttl,
+            )
+        )
 
 
 def sanity_check_external_hook():
@@ -162,6 +216,8 @@ class Controller:
         self._nav_event_conn = None
         self._evNewProgramInfo = None
         self._external_rate_limiter = _ExternalRateLimiter()
+        self._external_stats = _ExternalStats()
+        self._external_stats_timer = None
 
         Controller._instance = self
 
@@ -197,6 +253,7 @@ class Controller:
             self._apply_pool_capacity()
             self._arbiter.start()
             self._wire_evnewproginfo()
+            self._start_external_stats_heartbeat()
             infobar = self._find_infobar()
             if infobar is None:
                 warn("InfoBar not ready yet; deferring interceptor start")
@@ -224,6 +281,7 @@ class Controller:
                 self._rearm_timer.stop()
                 self._rearm_timer = None
             self._stop_external_ttl()
+            self._stop_external_stats_heartbeat()
             self._unwire_evnewproginfo()
             self._interceptor.stop()
             self._arbiter.stop()
@@ -351,10 +409,12 @@ class Controller:
             verdict = self._external_rate_limiter.classify(
                 key, time.monotonic_ns(), max_per_sec)
             if verdict == "idempotent":
+                self._external_stats.calls_idempotent += 1
                 debug("pretune_external idempotent (same ref within 100 ms): %s"
                       % key)
                 return
             if verdict == "throttled":
+                self._external_stats.calls_throttled += 1
                 self._external_rate_limiter.record_drop()
                 drops = self._external_rate_limiter.take_warn_count(
                     time.monotonic_ns())
@@ -365,16 +425,23 @@ class Controller:
                 return
             existing = self._pool.lookup(ref)
             if existing is not None:
+                self._external_stats.calls_convergence_skip += 1
                 debug("pretune_external: ref already armed "
                       "(role=%s), skipping arm" % existing.role.value)
                 return
             self._pool.arm({Role.EXTERNAL: [ref]})
+            self._external_stats.calls_armed += 1
             info("pretune_external armed ref=%s" % key)
         except Exception as exc:
             # External-caller induced failures do NOT increment the
             # watchdog counter - those are someone else's bugs and
             # must not let a misbehaving companion plugin kill us.
-            error("pretune_external: %r" % exc)
+            # Always include the full traceback - errors are rare
+            # enough that log volume is not a concern, and the
+            # traceback is what a forum reporter needs to attribute
+            # the fault.
+            self._external_stats.calls_errors += 1
+            error("pretune_external: %r\n%s" % (exc, traceback.format_exc()))
 
     def release_external(self, ref):
         """Release the EXTERNAL pool slot.
@@ -395,6 +462,7 @@ class Controller:
                         self._pool.release_after_swap(slot)
                         released = True
                 if released:
+                    self._external_stats.releases_explicit += 1
                     info("release_external (unconditional)")
                     self._stop_external_ttl()
                 return
@@ -404,13 +472,14 @@ class Controller:
                     continue
                 if _ref_key(slot.service_ref) == target_key:
                     self._pool.release_after_swap(slot)
+                    self._external_stats.releases_explicit += 1
                     info("release_external matched ref=%s" % target_key)
                     self._stop_external_ttl()
                     return
             debug("release_external: no EXTERNAL slot holds %s "
                   "(possibly already torn down)" % target_key)
         except Exception as exc:
-            error("release_external: %r" % exc)
+            error("release_external: %r\n%s" % (exc, traceback.format_exc()))
 
     def _refresh_external_ttl(self):
         """Start or restart the TTL safety net. Default 5 min - long
@@ -438,6 +507,7 @@ class Controller:
                 ttl_ms = 300000
             self._external_ttl_timer.stop()
             self._external_ttl_timer.start(ttl_ms, True)
+            self._external_stats.ttl_refreshes += 1
         except Exception as exc:
             error("_refresh_external_ttl: %r" % exc)
 
@@ -450,7 +520,14 @@ class Controller:
 
     def _handle_external_ttl(self):
         info("external slot TTL expired - releasing")
+        # Bookkeeping for the stats heartbeat - release_external
+        # itself credits as releases_explicit because it cannot tell
+        # the caller apart; bump the TTL counter here and decrement
+        # explicit so the totals stay correct.
         self.release_external(None)
+        if self._external_stats.releases_explicit > 0:
+            self._external_stats.releases_explicit -= 1
+        self._external_stats.releases_via_ttl += 1
 
     def _wire_evnewproginfo(self):
         """Subscribe to ``evNewProgramInfo`` so a zap that bypasses
@@ -497,6 +574,40 @@ class Controller:
         except Exception as exc:
             error("_on_nav_event: %r" % exc)
 
+    # --- external stats heartbeat (60s, info-level) --------------------
+
+    def _start_external_stats_heartbeat(self):
+        """Fires once per minute; emits a one-line summary of the
+        external slot activity at info level when there has been
+        any. Quiet minutes emit nothing - the log stays clean while
+        an idle box is sitting around.
+        """
+        try:
+            from enigma import eTimer
+            if self._external_stats_timer is None:
+                self._external_stats_timer = eTimer()
+                self._external_stats_timer.callback.append(
+                    self._flush_external_stats)
+            self._external_stats_timer.stop()
+            self._external_stats_timer.start(60_000, False)  # repeating
+        except Exception as exc:
+            error("_start_external_stats_heartbeat: %r" % exc)
+
+    def _stop_external_stats_heartbeat(self):
+        if self._external_stats_timer is not None:
+            try:
+                self._external_stats_timer.stop()
+            except Exception:
+                pass
+
+    def _flush_external_stats(self):
+        try:
+            if self._external_stats.has_activity():
+                info(self._external_stats.format())
+            self._external_stats.reset()
+        except Exception as exc:
+            error("_flush_external_stats: %r" % exc)
+
     def _release_external_if_live_matches(self):
         """Compare the live service ref against the EXTERNAL slot;
         release the slot on a match. Covers the case where the zap
@@ -521,6 +632,7 @@ class Controller:
                     debug("evNewProgramInfo: live matches EXTERNAL "
                           "slot, releasing")
                     self._pool.release_after_swap(slot)
+                    self._external_stats.releases_via_evnewproginfo += 1
                     self._stop_external_ttl()
                     return
         except Exception as exc:
