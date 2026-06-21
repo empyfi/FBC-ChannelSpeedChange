@@ -15,6 +15,14 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   `None`. Calls are silent no-ops when the master switch or the
   new `accept_external_pretune` toggle is off, or when the
   controller has not started yet.
+- The api accepts either an `eServiceReference` instance or a
+  canonical DVB broadcast serviceref string
+  (`1:0:<stype>:<sid>:<tsid>:<onid>:<ns>:...`). Strings are
+  validated against a strict shape whitelist before the SWIG
+  constructor sees them, so malformed input cannot reach the
+  C++ parser. Callers holding the cursor as a string
+  (`ChannelSelection.getCurrentSelection().toString()`) no
+  longer need to wrap it in `eServiceReference(...)` themselves.
 - New `Role.EXTERNAL` pool slot driven exclusively by the api
   module. Capacity 1 by default, never competes with the
   internal NEXT / PREV / HISTORY predictor. Convergence with

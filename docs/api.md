@@ -40,10 +40,13 @@ Arm or refresh the EXTERNAL pool slot with `service_ref`.
   allocated.
 
 **Argument:**
-- `service_ref` — an `eServiceReference`-shaped object. The
-  check is duck-typed: any object exposing `.toString()` is
-  accepted. `None`, primitives, and objects without
-  `.toString()` are silently dropped.
+- `service_ref` — either an `eServiceReference`-shaped object
+  (any object exposing `.toString()`) or a string matching the
+  canonical DVB broadcast serviceref shape (see *Accepted
+  string form* below). A matching string is converted into an
+  `eServiceReference` by the api layer before the controller
+  sees it. `None`, primitives, objects without `.toString()`
+  and strings that fail the shape check are silently dropped.
 
 **Returns:** `None`.
 
@@ -62,10 +65,46 @@ Release the EXTERNAL pool slot.
   which ref it last sent.
 
 **Argument:**
-- `service_ref` (optional) — `eServiceReference`-shaped or
-  `None`. Other types are silently dropped.
+- `service_ref` (optional) — `eServiceReference`-shaped, a
+  shape-matching DVB broadcast string (see below) or `None`.
+  Other types are silently dropped.
 
 **Returns:** `None`.
+
+---
+
+## Accepted string form
+
+For callers that already hold a service reference as a string
+(e.g. `ChannelSelection`'s cursor read via
+`.toString().strip()`), the api accepts the raw string
+directly — no need to import `eServiceReference` on the caller
+side.
+
+The shape is whitelisted before any SWIG construction so a
+malformed input cannot reach the C++ parser. Only the canonical
+DVB broadcast format is accepted:
+
+```
+1:0:<stype>:<sid>:<tsid>:<onid>:<ns>:<parent_sid>:<parent_tsid>:<unused>:[<trailing>]
+```
+
+- Type prefix must be exactly `1:0:` (DVB broadcast service).
+  Bouquets (`1:7:`), IPTV (`4097:`), markers and file-backed
+  playback refs are rejected.
+- Fields 3..7 must each be one or more hex digits
+  (`[0-9a-fA-F]+`).
+- The trailing portion (fields 8..10 and the optional path /
+  name) must contain only hex digits and colons. A `/`,
+  backslash or other non-hex byte rejects the string.
+- The string is capped at 512 bytes.
+
+A rejected string is a silent no-op — identical to passing
+`None`. Use `cfg.debug_log = True` on the receiver side to see
+which call shapes are being rejected.
+
+`eServiceReference` instances bypass the shape check (they are
+already a parsed object). Pass either form interchangeably.
 
 ---
 
@@ -78,7 +117,7 @@ Calls are silent no-ops when any of the following is false:
 | Master safety | `cfg.allow_pretune` | True | Off blocks every tuner reservation in the plugin, not just the EXTERNAL slot. |
 | External feature | `cfg.accept_external_pretune` | True | The api-module-specific gate. Off silences the public api without disturbing the internal NEXT/PREV/HISTORY paths. |
 | Controller alive | `Controller.peek()` | — | During early boot or after a watchdog self-disable the controller is `None` and calls fall through. |
-| Input validation | `_is_serviceref` | — | Non-`eServiceReference` input never reaches the controller layer. |
+| Input validation | `_coerce_to_serviceref` | — | Non-`eServiceReference` input and strings that fail the shape whitelist never reach the controller layer. |
 
 A companion plugin does NOT need to check these gates itself.
 The api module short-circuits and the call returns immediately
@@ -178,7 +217,7 @@ stream during the entire pretune window.
 
 | Failure | Caller-visible | Plugin-side |
 |---|---|---|
-| Bad input (`None`, non-`eServiceReference`) | silent no-op | nothing logged |
+| Bad input (`None`, non-`eServiceReference`, malformed string) | silent no-op | nothing logged |
 | Controller not yet started | silent no-op | nothing logged |
 | Gates off | silent no-op | nothing logged |
 | Controller raises | silent no-op | error line + full traceback in log |

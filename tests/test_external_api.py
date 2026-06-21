@@ -155,16 +155,19 @@ class ExternalApiTests(unittest.TestCase):
         self.assertEqual(self.fake.pretune_calls, [])
 
     def test_pretune_no_op_on_non_serviceref(self):
-        # Primitives and arbitrary objects must be rejected before
-        # they reach the controller / pool / SWIG layers.
-        for garbage in (42, "1:0:1:A:0:0:0:0:0:0:", [], {"ref": "A"}, object()):
+        # Primitives, collections and arbitrary objects must be
+        # rejected before they reach the controller / pool / SWIG
+        # layers. Strings are validated separately by the shape
+        # whitelist; see test_pretune_accepts_valid_string_ref and
+        # test_pretune_rejects_malformed_string_ref below.
+        for garbage in (42, [], {"ref": "A"}, object(), 3.14, b"bytes"):
             api.PreTuneSingleChannel(garbage)
         self.assertEqual(self.fake.pretune_calls, [],
                          "non-eServiceReference inputs must not reach "
                          "the controller")
 
     def test_release_no_op_on_non_serviceref(self):
-        for garbage in (42, "1:0:1:A:0:0:0:0:0:0:", [], object()):
+        for garbage in (42, [], object(), 3.14):
             api.ReleaseSingleChannel(garbage)
         self.assertEqual(self.fake.release_calls, [])
 
@@ -174,6 +177,60 @@ class ExternalApiTests(unittest.TestCase):
         # validator.
         api.ReleaseSingleChannel(None)
         self.assertEqual(self.fake.release_calls, [None])
+
+    # ---- string-form input (whitelist-gated SWIG construction) ----
+
+    def test_pretune_accepts_valid_string_ref(self):
+        # A string matching the canonical DVB broadcast shape is
+        # coerced into an eServiceReference by the api layer and
+        # forwarded to the controller. Callers that lack an
+        # eServiceReference object (e.g. FCC-Extender's ChannelSelection
+        # hooks read the cursor as a string) get to use the api
+        # without wrapping the constructor themselves.
+        api.PreTuneSingleChannel("1:0:1:6DCA:44D:1:C00000:0:0:0:")
+        self.assertEqual(len(self.fake.pretune_calls), 1,
+                         "valid string ref must reach the controller")
+        forwarded = self.fake.pretune_calls[0]
+        self.assertTrue(hasattr(forwarded, "toString"),
+                        "controller receives an eServiceReference-shaped "
+                        "object, never the raw string")
+        self.assertEqual(forwarded.toString(),
+                         "1:0:1:6DCA:44D:1:C00000:0:0:0:")
+
+    def test_release_accepts_valid_string_ref(self):
+        api.ReleaseSingleChannel("1:0:1:6DCA:44D:1:C00000:0:0:0:")
+        self.assertEqual(len(self.fake.release_calls), 1)
+        forwarded = self.fake.release_calls[0]
+        self.assertTrue(hasattr(forwarded, "toString"))
+        self.assertEqual(forwarded.toString(),
+                         "1:0:1:6DCA:44D:1:C00000:0:0:0:")
+
+    def test_pretune_rejects_malformed_string_ref(self):
+        # The whitelist is deliberately tight to keep service-type
+        # spoofing, file-path injection and unparseable garbage out
+        # of the SWIG constructor. Each rejected shape covers one
+        # concrete attack pattern; see the rationale in api.py.
+        rejected = [
+            "",                                           # empty
+            "garbage",                                    # not even close
+            "4097:0:1:A:B:C:D:0:0:0:",                    # IPTV type spoof
+            "1:7:1:A:B:C:D:0:0:0:",                       # bouquet (flags=7)
+            "2:0:1:A:B:C:D:0:0:0:",                       # marker type
+            "1:0:1:A:B:C:",                               # too few fields
+            "1:0:Z:A:B:C:D:0:0:0:",                       # non-hex stype
+            "1:0:1:A:B:C:D:0:0:0:/etc/shadow:name",       # path injection
+            "1:0:1:A:B:C:D:0:0:0:" + "X" * 600,           # oversize
+        ]
+        for s in rejected:
+            api.PreTuneSingleChannel(s)
+        self.assertEqual(self.fake.pretune_calls, [],
+                         "no malformed string may reach the controller")
+
+    def test_release_rejects_malformed_string_ref(self):
+        for s in ("", "garbage", "4097:0:1:A:B:C:D:0:0:0:",
+                  "1:7:1:A:B:C:D:0:0:0:", "1:0:1:A:B:C:"):
+            api.ReleaseSingleChannel(s)
+        self.assertEqual(self.fake.release_calls, [])
 
     # ---- caller-frame diagnostic (debug_log mode) ----
 

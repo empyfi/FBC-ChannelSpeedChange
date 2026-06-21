@@ -91,8 +91,31 @@ def _build_enigma():
         evStart = 1    # ditto
         evNewProgramInfo = 7  # ditto - used by controller external slot
 
+    class eServiceReference:
+        """Minimal stand-in for the SWIG class - the api module's
+        string-coerce path constructs one to hand off to the
+        controller, tests assert on ``.toString()`` equality.
+        """
+
+        def __init__(self, s=""):
+            self._s = str(s)
+
+        def toString(self):
+            return self._s
+
+        def __eq__(self, other):
+            return (isinstance(other, eServiceReference)
+                    and self._s == other._s)
+
+        def __hash__(self):
+            return hash(self._s)
+
+        def __repr__(self):
+            return "eServiceReference(%r)" % self._s
+
     mod.eTimer = eTimer
     mod.iPlayableService = iPlayableService
+    mod.eServiceReference = eServiceReference
     sys.modules["enigma"] = mod
     return mod
 
