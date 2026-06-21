@@ -47,6 +47,13 @@ class Controller:
         self._rearm_timer = None
         self._pending_zap_start_time = None
 
+        # v0.5.0 external-slot plumbing. eTimer instantiation is
+        # deferred to the first use so the import-time module load
+        # stays cheap.
+        self._external_ttl_timer = None
+        self._nav_event_conn = None
+        self._evNewProgramInfo = None
+
         Controller._instance = self
 
     # --- lifecycle ------------------------------------------------------
@@ -79,6 +86,7 @@ class Controller:
 
             self._apply_pool_capacity()
             self._arbiter.start()
+            self._wire_evnewproginfo()
             infobar = self._find_infobar()
             if infobar is None:
                 warn("InfoBar not ready yet; deferring interceptor start")
@@ -105,6 +113,8 @@ class Controller:
             if self._rearm_timer is not None:
                 self._rearm_timer.stop()
                 self._rearm_timer = None
+            self._stop_external_ttl()
+            self._unwire_evnewproginfo()
             self._interceptor.stop()
             self._arbiter.stop()
             self._pool.shutdown()
@@ -132,10 +142,18 @@ class Controller:
     # --- pool driving ---------------------------------------------------
 
     def _apply_pool_capacity(self):
+        # cfg.accept_external_pretune lands in Phase 4; treat the
+        # missing attribute as off so this code path is safe between
+        # phases.
+        try:
+            external_cap = 1 if cfg.accept_external_pretune.value else 0
+        except AttributeError:
+            external_cap = 0
         self._pool.configure({
             Role.NEXT: 1 if cfg.pretune_next.value else 0,
             Role.PREV: 1 if cfg.pretune_prev.value else 0,
             Role.HISTORY: 1 if cfg.pretune_history.value else 0,
+            Role.EXTERNAL: external_cap,
         })
 
     def _on_post_zap(self):
@@ -180,6 +198,193 @@ class Controller:
         except Exception as exc:
             error("_do_rearm: %r" % exc)
             self._record_failure()
+
+    # --- external pretune (v0.5.0 public API) --------------------------
+
+    def pretune_external(self, ref):
+        """Arm or refresh the EXTERNAL pool slot with ``ref``.
+
+        Convergence check via ``pool.lookup`` covers both idempotency
+        rules in one shot:
+          * ref already armed in NEXT / PREV / HISTORY → no-op (the
+            eventual zap is satisfied by channel-share on the
+            existing slot)
+          * ref already armed in EXTERNAL → no-op (refresh the TTL
+            anyway so the slot keeps living)
+        A different ref simply overwrites the previous EXTERNAL
+        target on the next arm() cycle.
+        """
+        try:
+            if not self._enabled:
+                return
+            # Always refresh the TTL on a call, even when the ref is
+            # already armed - the call itself proves the caller still
+            # wants the slot alive.
+            self._refresh_external_ttl()
+            existing = self._pool.lookup(ref)
+            if existing is not None:
+                debug("pretune_external: ref already armed "
+                      "(role=%s), skipping arm" % existing.role.value)
+                return
+            self._pool.arm({Role.EXTERNAL: [ref]})
+            try:
+                key = _ref_key(ref)
+            except Exception:
+                key = "<unprintable>"
+            info("pretune_external armed ref=%s" % key)
+        except Exception as exc:
+            error("pretune_external: %r" % exc)
+            self._record_failure()
+
+    def release_external(self, ref):
+        """Release the EXTERNAL pool slot.
+
+        With ``ref``: release only if the slot currently holds that
+        exact reference (race-safe against a late close-event landing
+        after a newer ``pretune_external`` overwrote the slot).
+        Without ``ref`` (``None``): release every armed EXTERNAL slot.
+        """
+        try:
+            if not self._enabled:
+                return
+            slots = self._pool._slots_by_role.get(Role.EXTERNAL, [])
+            if ref is None:
+                released = False
+                for slot in slots:
+                    if slot.service_ref is not None:
+                        self._pool.release_after_swap(slot)
+                        released = True
+                if released:
+                    info("release_external (unconditional)")
+                    self._stop_external_ttl()
+                return
+            target_key = _ref_key(ref)
+            for slot in slots:
+                if slot.service_ref is None:
+                    continue
+                if _ref_key(slot.service_ref) == target_key:
+                    self._pool.release_after_swap(slot)
+                    info("release_external matched ref=%s" % target_key)
+                    self._stop_external_ttl()
+                    return
+            debug("release_external: no EXTERNAL slot holds %s "
+                  "(possibly already torn down)" % target_key)
+        except Exception as exc:
+            error("release_external: %r" % exc)
+
+    def _refresh_external_ttl(self):
+        """Start or restart the TTL safety net. Default 5 min - long
+        enough that legitimate EPG-read sessions never get torn down
+        mid-read, short enough that a leaked slot does not hold a
+        tuner indefinitely.
+
+        Lifecycle ownership belongs to the external caller (FCC-
+        Extender etc.) via the explicit ``release_external`` path;
+        the TTL only catches the cases where the caller never sends
+        a release (crashed, plugin disabled mid-flight, future
+        Extender bug).
+        """
+        try:
+            from enigma import eTimer
+            if self._external_ttl_timer is None:
+                self._external_ttl_timer = eTimer()
+                self._external_ttl_timer.callback.append(
+                    self._handle_external_ttl)
+            try:
+                ttl_ms = int(cfg.external_slot_ttl_ms.value)
+            except AttributeError:
+                ttl_ms = 300000  # Phase 4 lands the config key
+            except Exception:
+                ttl_ms = 300000
+            self._external_ttl_timer.stop()
+            self._external_ttl_timer.start(ttl_ms, True)
+        except Exception as exc:
+            error("_refresh_external_ttl: %r" % exc)
+
+    def _stop_external_ttl(self):
+        if self._external_ttl_timer is not None:
+            try:
+                self._external_ttl_timer.stop()
+            except Exception:
+                pass
+
+    def _handle_external_ttl(self):
+        info("external slot TTL expired - releasing")
+        self.release_external(None)
+
+    def _wire_evnewproginfo(self):
+        """Subscribe to ``evNewProgramInfo`` so a zap that bypasses
+        the ZapInterceptor (e.g. ``session.nav.playService`` from
+        outside ChannelSelection) still triggers EXTERNAL-slot
+        cleanup when the live service matches the armed ref.
+
+        On builds where the event constant is unavailable, the
+        subscription is skipped silently. Phase 5 hardens this into
+        a sanity check that warns the user explicitly.
+        """
+        try:
+            import NavigationInstance
+            from enigma import iPlayableService
+            nav = NavigationInstance.instance
+            if nav is None:
+                warn("evNewProgramInfo: NavigationInstance not ready")
+                return
+            self._evNewProgramInfo = getattr(
+                iPlayableService, "evNewProgramInfo", None)
+            if self._evNewProgramInfo is None:
+                warn("evNewProgramInfo: enum value missing on this build")
+                return
+            nav.event.append(self._on_nav_event)
+            self._nav_event_conn = nav
+        except Exception as exc:
+            error("_wire_evnewproginfo: %r" % exc)
+
+    def _unwire_evnewproginfo(self):
+        if self._nav_event_conn is None:
+            return
+        try:
+            self._nav_event_conn.event.remove(self._on_nav_event)
+        except Exception as exc:
+            debug("evNewProgramInfo unwire: %r" % exc)
+        finally:
+            self._nav_event_conn = None
+
+    def _on_nav_event(self, reason):
+        try:
+            if reason != self._evNewProgramInfo:
+                return
+            self._release_external_if_live_matches()
+        except Exception as exc:
+            error("_on_nav_event: %r" % exc)
+
+    def _release_external_if_live_matches(self):
+        """Compare the live service ref against the EXTERNAL slot;
+        release the slot on a match. Covers the case where the zap
+        bypasses the ZapInterceptor and would otherwise leave the
+        EXTERNAL slot armed against the now-live service - wasting a
+        demodulator until the next rearm or TTL.
+        """
+        try:
+            import NavigationInstance
+            nav = NavigationInstance.instance
+            if nav is None:
+                return
+            live = nav.getCurrentlyPlayingServiceReference()
+            if live is None:
+                return
+            live_key = _ref_key(live)
+            slots = self._pool._slots_by_role.get(Role.EXTERNAL, [])
+            for slot in slots:
+                if slot.service_ref is None:
+                    continue
+                if _ref_key(slot.service_ref) == live_key:
+                    debug("evNewProgramInfo: live matches EXTERNAL "
+                          "slot, releasing")
+                    self._pool.release_after_swap(slot)
+                    self._stop_external_ttl()
+                    return
+        except Exception as exc:
+            error("_release_external_if_live_matches: %r" % exc)
 
     # --- sanity ---------------------------------------------------------
 

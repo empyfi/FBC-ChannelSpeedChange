@@ -89,6 +89,7 @@ def _build_enigma():
     class iPlayableService:
         evTunedIn = 6  # arbitrary; tests don't depend on value
         evStart = 1    # ditto
+        evNewProgramInfo = 7  # ditto - used by controller external slot
 
     mod.eTimer = eTimer
     mod.iPlayableService = iPlayableService
