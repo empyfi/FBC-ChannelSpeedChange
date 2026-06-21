@@ -66,8 +66,13 @@ def _initialize():
     # carries the Pay-TV behaviour for the EXTERNAL slot and follows
     # the same per-direction default-off pattern as the other three.
     cfg.accept_external_pretune = ConfigYesNo(default=False)
-    cfg.external_slot_ttl_ms = ConfigInteger(
-        default=300000, limits=(10000, 1800000))
+    # TTL is exposed in minutes so the Setup screen shows a human
+    # number; the controller multiplies by 60000 before handing it
+    # to eTimer. Limits: 1 minute (the lower bound the safety-net
+    # still makes sense at) up to 30 minutes (anything longer
+    # leaks demods for too long).
+    cfg.external_slot_ttl_min = ConfigInteger(
+        default=5, limits=(1, 30))
     cfg.prewarm_descrambler_external = ConfigYesNo(default=False)
 
     # Tiny on-screen overlay after every zap, showing the measured

@@ -275,7 +275,7 @@ below for the full mechanic.
 | Key | Default | Description |
 |---|---|---|
 | Accept external pre-tune calls | no | Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off by default — turn on only when a paired plugin is installed and configured. |
-| External slot TTL (ms, safety net) | 300000 | Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 300000 ms (5 min) — long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment. |
+| External slot TTL (minutes, safety net) | 5 | Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 5 minutes — long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment. |
 
 ### Pay-TV
 
@@ -461,7 +461,7 @@ descending priority:
      automatically — covers the case where the eventual zap
      bypasses the ZapInterceptor (`session.nav.playService`
      from outside ChannelSelection).
-  3. *TTL safety net.* `external_slot_ttl_ms`, default 5 min.
+  3. *TTL safety net.* `external_slot_ttl_min`, default 5 min.
      Catches the case where the explicit release never lands
      (companion plugin crashed, plugin disabled mid-flight,
      future caller bug). Long enough that legitimate

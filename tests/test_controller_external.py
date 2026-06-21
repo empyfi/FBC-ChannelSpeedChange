@@ -128,8 +128,8 @@ from Components.config import ConfigYesNo, ConfigInteger
 
 if not hasattr(_cfg, "accept_external_pretune"):
     _cfg.accept_external_pretune = ConfigYesNo(default=False)
-if not hasattr(_cfg, "external_slot_ttl_ms"):
-    _cfg.external_slot_ttl_ms = ConfigInteger(default=300000)
+if not hasattr(_cfg, "external_slot_ttl_min"):
+    _cfg.external_slot_ttl_min = ConfigInteger(default=5)
 if not hasattr(_cfg, "prewarm_descrambler_external"):
     _cfg.prewarm_descrambler_external = ConfigYesNo(default=False)
 

@@ -23,20 +23,30 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   satisfied through channel-share without a duplicate
   recordable.
 - TTL safety net for the EXTERNAL slot
-  (`cfg.external_slot_ttl_ms`, default 300000 ms = 5 min).
-  Auto-releases when the companion plugin's explicit release
-  never lands. Long enough that legitimate EPG-read sessions
-  never get torn down mid-read.
+  (`cfg.external_slot_ttl_min`, default 5 minutes). Auto-
+  releases when the companion plugin's explicit release never
+  lands. Long enough that legitimate EPG-read sessions never
+  get torn down mid-read. The UI exposes the value in minutes;
+  the controller multiplies by 60000 before handing it to
+  ``eTimer``.
 - `evNewProgramInfo` listener that releases the EXTERNAL slot
   when the live service changes to the armed ref. Covers the
   shortcut-zap path where `session.nav.playService` is called
   from outside `ChannelSelection`.
 - Three new ConfigYesNo / ConfigInteger toggles:
   `accept_external_pretune` (default False, master gate),
-  `external_slot_ttl_ms` (default 300000),
+  `external_slot_ttl_min` (default 5, limits 1..30),
   `prewarm_descrambler_external` (default False, Pay-TV opt-in
   for the EXTERNAL slot using the same semantics as the
   existing three direction toggles).
+- FCC-Extender presence indicator injected into the External
+  pretune Setup group. A small helper reads `/var/lib/opkg/status`
+  at Setup-screen open time and inserts a "FCC-Extender:
+  installed / not detected / status unknown" header-style row
+  directly under the group header. Substring match on
+  ``fccextender`` / ``fcc-extender`` catches the VTi build, the
+  expected OpenATV port and either hyphenation Oberhesse settles
+  on.
 - New `External pretune (FCC-Extender)` group in `setup.xml`
   and matching DE translations in `po/de.po`. The new Pay-TV
   descrambler row for the EXTERNAL slot sits at the end of the

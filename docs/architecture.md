@@ -334,8 +334,8 @@ the internal predictor never writes to it.
               |       ChannelSelection.zap           |
               |                                      |
               |  C) TTL expiry                       |
-              |     - external_slot_ttl_ms, default  |
-              |       300000 (5 min)                 |
+              |     - external_slot_ttl_min, default |
+              |       5 (minutes)                    |
               |     - safety net only - the          |
               |       companion plugin's explicit    |
               |       release is the primary path    |

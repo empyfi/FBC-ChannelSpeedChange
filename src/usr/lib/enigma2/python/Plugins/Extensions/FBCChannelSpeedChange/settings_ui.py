@@ -13,10 +13,47 @@ Inheriting Setup gives the plugin three things for free:
 The only override is `keySave`: the live controller is notified
 before delegating to the parent's full save+close path so a running
 session picks the new values up without an enigma2 restart.
+
+A small post-init pass injects an FCC-Extender presence indicator
+into the External pretune group so the user can see at a glance
+whether the companion plugin is on the box.
 """
 
 from . import _
 from .logger import error
+
+
+_OPKG_STATUS_PATH = "/var/lib/opkg/status"
+
+
+def _classify_fccextender_content(content):
+    """Classify an opkg-status file body into a human-readable label.
+
+    The OpenATV port of the FCC-Extender is not yet published; the
+    VTi build's package name is ``enigma2-plugin-extensions-vti-fccextender``.
+    The OpenATV variant will most likely keep the ``fccextender``
+    stem so a substring match catches whichever exact name lands.
+    Returns the translated label that the setup screen renders
+    under the External pretune group header.
+    """
+    lowered = content.lower()
+    if "fccextender" in lowered or "fcc-extender" in lowered:
+        return _("FCC-Extender: installed")
+    return _("FCC-Extender: not detected")
+
+
+def _detect_fccextender_status():
+    """Read the opkg status file and return the user-facing label.
+
+    Wrapped in try/except so an unexpected I/O failure surfaces as
+    "status unknown" rather than crashing the setup screen open.
+    """
+    try:
+        with open(_OPKG_STATUS_PATH, "r") as fh:
+            content = fh.read()
+        return _classify_fccextender_content(content)
+    except Exception:
+        return _("FCC-Extender: status unknown")
 
 
 class FBCChannelSpeedChangeSetup(object):
@@ -53,6 +90,39 @@ try:
                     plugin="Extensions/FBCChannelSpeedChange",
                 )
             self.setTitle(_("FBC ChannelSpeedChange"))
+            self._inject_fccextender_status()
+
+        def _inject_fccextender_status(self):
+            """Insert a status row right after the External pretune
+            group header so the user sees the FCC-Extender presence
+            without leaving the screen.
+
+            Setup's rendered list holds header-style rows as 1-tuples
+            and config rows as 3-tuples. Inserting a fresh 1-tuple
+            matches the Setup base class's "label only" branch and
+            renders as a non-selectable info row.
+            """
+            try:
+                # The header text carries the "FCC-Extender" substring
+                # in both the English and German catalogue entries, so
+                # a substring match localises gracefully.
+                marker = "FCC-Extender"
+                for i, row in enumerate(self.list):
+                    if not row:
+                        continue
+                    label = row[0]
+                    if not isinstance(label, str) or marker not in label:
+                        continue
+                    self.list.insert(i + 1, (_detect_fccextender_status(),))
+                    if hasattr(self, "config_list_widget"):
+                        # Newer openatv builds use this attribute name
+                        # for the widget that renders self.list.
+                        self.config_list_widget.setList(self.list)
+                    elif "config" in self and hasattr(self["config"], "setList"):
+                        self["config"].setList(self.list)
+                    break
+            except Exception as exc:
+                error("_inject_fccextender_status crashed (caught): %r" % exc)
 
         def keySave(self):
             # Re-arm the live controller with the new toggles so the

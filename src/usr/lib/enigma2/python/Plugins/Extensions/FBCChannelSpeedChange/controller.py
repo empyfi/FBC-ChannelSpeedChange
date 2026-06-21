@@ -333,9 +333,9 @@ class Controller:
                 self._external_ttl_timer.callback.append(
                     self._handle_external_ttl)
             try:
-                ttl_ms = int(cfg.external_slot_ttl_ms.value)
+                ttl_ms = int(cfg.external_slot_ttl_min.value) * 60 * 1000
             except AttributeError:
-                ttl_ms = 300000  # Phase 4 lands the config key
+                ttl_ms = 300000  # config key not yet present
             except Exception:
                 ttl_ms = 300000
             self._external_ttl_timer.stop()

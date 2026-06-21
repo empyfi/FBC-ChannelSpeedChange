@@ -115,11 +115,23 @@ msgstr "Externe Vorhalte-Aufrufe annehmen"
 msgid "Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off by default - turn on only when a paired plugin is installed and configured."
 msgstr "Lässt Begleit-Plugins (z. B. FCC-Extender) eine Sender-Referenz in einen dedizierten EXTERNAL-Slot legen. Standardmäßig aus - nur einschalten, wenn ein passendes Plugin installiert und eingerichtet ist."
 
-msgid "External slot TTL (ms, safety net)"
-msgstr "TTL des externen Slots (ms, Sicherheitsnetz)"
+msgid "External slot TTL (minutes, safety net)"
+msgstr "TTL des externen Slots (Minuten, Sicherheitsnetz)"
 
-msgid "Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 300000 ms (5 min) - long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment."
-msgstr "Gibt den EXTERNAL-Slot automatisch frei, falls der Aufrufer vergisst eine Release-Nachricht zu senden. Standard 300000 ms (5 min) - lang genug für normales EPG-Lesen, kurz genug, dass ein vergessener Slot keinen Tuner dauerhaft blockiert. Selten anzupassen."
+# Dynamic FCC-Extender status row injected into the External pretune
+# group at setup-screen open time. Three possible states.
+
+msgid "FCC-Extender: installed"
+msgstr "FCC-Extender: installiert"
+
+msgid "FCC-Extender: not detected"
+msgstr "FCC-Extender: nicht erkannt"
+
+msgid "FCC-Extender: status unknown"
+msgstr "FCC-Extender: Status unbekannt"
+
+msgid "Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 5 minutes - long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment."
+msgstr "Gibt den EXTERNAL-Slot automatisch frei, falls der Aufrufer vergisst eine Release-Nachricht zu senden. Standard 5 Minuten - lang genug für normales EPG-Lesen, kurz genug, dass ein vergessener Slot keinen Tuner dauerhaft blockiert. Selten anzupassen."
 
 # Group 5: Pay-TV
 
