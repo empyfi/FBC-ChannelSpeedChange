@@ -18,6 +18,47 @@ from .resource_arbiter import ResourceArbiter
 from .zap_interceptor import ZapInterceptor, sanity_check_infobar
 
 
+def sanity_check_external_hook():
+    """Inspect the evNewProgramInfo subscription surface the v0.5.0
+    EXTERNAL slot lifecycle relies on.
+
+    Returns (critical, optional). A missing surface is critical when
+    ``cfg.accept_external_pretune`` is on - the EXTERNAL slot would
+    otherwise leak past the TTL only path on shortcut-zaps that bypass
+    the ZapInterceptor. When the gate is off the same missing surface
+    is purely informational.
+    """
+    critical = []
+    optional = []
+    accept_on = False
+    try:
+        accept_on = bool(cfg.accept_external_pretune.value)
+    except Exception:
+        accept_on = False
+
+    def _flag(msg):
+        (critical if accept_on else optional).append(msg)
+
+    try:
+        from enigma import iPlayableService
+        if not hasattr(iPlayableService, "evNewProgramInfo"):
+            _flag("iPlayableService.evNewProgramInfo enum")
+    except Exception as exc:
+        _flag("enigma.iPlayableService import: %r" % exc)
+
+    try:
+        import NavigationInstance
+        nav = NavigationInstance.instance
+        if nav is None:
+            _flag("NavigationInstance.instance (not ready)")
+        elif not hasattr(nav, "event"):
+            _flag("NavigationInstance.instance.event")
+    except Exception as exc:
+        _flag("NavigationInstance import: %r" % exc)
+
+    return critical, optional
+
+
 class Controller:
     _instance = None
 
@@ -78,10 +119,11 @@ class Controller:
             # once the InfoBar is available (direct or deferred path).
             pool_crit, pool_opt = self._pool.sanity_check()
             arb_crit, arb_opt = self._arbiter.sanity_check()
-            for w in pool_opt + arb_opt:
+            ext_crit, ext_opt = sanity_check_external_hook()
+            for w in pool_opt + arb_opt + ext_opt:
                 warn("sanity (degraded): %s" % w)
-            if pool_crit + arb_crit:
-                self._sanity_refuse(pool_crit + arb_crit)
+            if pool_crit + arb_crit + ext_crit:
+                self._sanity_refuse(pool_crit + arb_crit + ext_crit)
                 return
 
             self._apply_pool_capacity()

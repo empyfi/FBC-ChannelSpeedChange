@@ -1,3 +1,5 @@
+import sys
+import types
 import unittest
 
 from _enigma_stubs import bootstrap
@@ -6,6 +8,12 @@ bootstrap()
 from FBCChannelSpeedChange.zap_interceptor import sanity_check_infobar
 from FBCChannelSpeedChange.fbc_pretune_pool import FBCPreTunePool
 from FBCChannelSpeedChange.resource_arbiter import ResourceArbiter
+from FBCChannelSpeedChange.controller import sanity_check_external_hook
+from FBCChannelSpeedChange.config import cfg as _cfg
+from Components.config import ConfigYesNo
+
+if not hasattr(_cfg, "accept_external_pretune"):
+    _cfg.accept_external_pretune = ConfigYesNo(default=False)
 
 
 class FakeServicelist:
@@ -100,6 +108,61 @@ class ArbiterSanityTests(unittest.TestCase):
         crit, opt = arb.sanity_check()
         self.assertEqual(crit, [])
         self.assertTrue(opt)
+
+
+class ExternalHookSanityTests(unittest.TestCase):
+    """Phase 5 sanity check: the evNewProgramInfo subscription surface
+    that the EXTERNAL slot lifecycle relies on. Missing-surface is
+    critical only when the user has opted into accept_external_pretune;
+    otherwise it is informational because the api module silently
+    no-ops when the gate is off.
+    """
+
+    def setUp(self):
+        # Some upstream test modules (test_controller_external) inject
+        # a fake NavigationInstance into sys.modules. Pop it so each
+        # case here can choose its own surface state explicitly.
+        self._saved_nav = sys.modules.pop("NavigationInstance", None)
+        self._original_gate = _cfg.accept_external_pretune.value
+
+    def tearDown(self):
+        if self._saved_nav is not None:
+            sys.modules["NavigationInstance"] = self._saved_nav
+        else:
+            sys.modules.pop("NavigationInstance", None)
+        _cfg.accept_external_pretune.value = self._original_gate
+
+    def _inject_full_surface(self):
+        """Provide a complete NavigationInstance + event-list shape."""
+        nav_mod = types.ModuleType("NavigationInstance")
+        nav_mod.instance = type("StubNav", (), {"event": []})()
+        sys.modules["NavigationInstance"] = nav_mod
+
+    def test_no_failures_when_surface_complete(self):
+        self._inject_full_surface()
+        _cfg.accept_external_pretune.value = True
+        crit, opt = sanity_check_external_hook()
+        self.assertEqual(crit, [], "complete surface must not flag critical")
+        self.assertEqual(opt, [], "complete surface must not flag optional")
+
+    def test_missing_nav_is_optional_when_gate_off(self):
+        # NavigationInstance not in sys.modules and gate off.
+        _cfg.accept_external_pretune.value = False
+        crit, opt = sanity_check_external_hook()
+        self.assertEqual(crit, [],
+                         "missing surface with gate off must not be critical")
+        self.assertTrue(opt,
+                        "missing surface with gate off should land as "
+                        "informational optional warning")
+
+    def test_missing_nav_is_critical_when_gate_on(self):
+        # NavigationInstance not in sys.modules and gate on.
+        _cfg.accept_external_pretune.value = True
+        crit, opt = sanity_check_external_hook()
+        self.assertTrue(crit,
+                        "missing surface with gate on must be critical "
+                        "so the start path refuses rather than silently "
+                        "leaking EXTERNAL slots past the TTL only path")
 
 
 if __name__ == "__main__":
