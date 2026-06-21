@@ -148,6 +148,33 @@ class ExternalApiTests(unittest.TestCase):
             release_raises=RuntimeError("boom"))
         api.ReleaseSingleChannel(FakeRef("1:0:1:A:0:0:0:0:0:0:"))
 
+    # ---- input validation (defensive against garbage callers) ----
+
+    def test_pretune_no_op_on_none_ref(self):
+        api.PreTuneSingleChannel(None)
+        self.assertEqual(self.fake.pretune_calls, [])
+
+    def test_pretune_no_op_on_non_serviceref(self):
+        # Primitives and arbitrary objects must be rejected before
+        # they reach the controller / pool / SWIG layers.
+        for garbage in (42, "1:0:1:A:0:0:0:0:0:0:", [], {"ref": "A"}, object()):
+            api.PreTuneSingleChannel(garbage)
+        self.assertEqual(self.fake.pretune_calls, [],
+                         "non-eServiceReference inputs must not reach "
+                         "the controller")
+
+    def test_release_no_op_on_non_serviceref(self):
+        for garbage in (42, "1:0:1:A:0:0:0:0:0:0:", [], object()):
+            api.ReleaseSingleChannel(garbage)
+        self.assertEqual(self.fake.release_calls, [])
+
+    def test_release_with_none_still_passes_through(self):
+        # None on Release is the documented "release whatever is in
+        # the slot" shape - it must NOT be rejected by the input
+        # validator.
+        api.ReleaseSingleChannel(None)
+        self.assertEqual(self.fake.release_calls, [None])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,8 @@ Created from plugin.py's WHERE_SESSIONSTART hook. There is one and only
 one Controller per enigma2 session.
 """
 
+import time
+
 from . import _
 from .logger import info, debug, warn, error
 from .config import cfg
@@ -16,6 +18,71 @@ from .fbc_pretune_pool import FBCPreTunePool, Role
 from .predictor import Predictor, _key as _ref_key
 from .resource_arbiter import ResourceArbiter
 from .zap_interceptor import ZapInterceptor, sanity_check_infobar
+
+
+class _ExternalRateLimiter:
+    """Sliding-window rate limiter for the public api module.
+
+    Two checks run in order:
+      * **Same-ref debounce.** A repeat call with the same ref
+        within 100 ms is reported as ``idempotent`` and the caller
+        path silently drops it - the pool's own idempotency would
+        cover this too, but short-circuiting here avoids touching
+        the pool / lookup at all on a chatty caller.
+      * **Distinct-ref burst cap.** When the number of distinct
+        refs seen in the trailing 1-second window already equals
+        ``cfg.external_max_calls_per_sec`` (default 10) and the
+        new ref is not one of them, the call is reported as
+        ``throttled`` and dropped. Real-world callers stay well
+        under this ceiling; the cap fires on rotating-ref bursts
+        from buggy or hostile sources.
+
+    The limiter also tracks drops since the last warn emission so
+    the caller can rate-limit its own warn output to once per
+    second.
+    """
+
+    BURST_WINDOW_NS = 1_000_000_000          # 1 s
+    SAME_REF_MIN_INTERVAL_NS = 100_000_000   # 100 ms
+
+    def __init__(self):
+        self._last_seen = {}        # ref_key -> last ts ns
+        self._window = []           # list of (ts ns, ref_key)
+        self._drops_since_warn = 0
+        self._last_warn_ns = 0
+
+    def classify(self, ref_key, now_ns, max_distinct_per_sec):
+        """Returns one of ``'allow'``, ``'idempotent'`` or
+        ``'throttled'``. The caller acts on the verdict; this
+        helper only tracks state.
+        """
+        last = self._last_seen.get(ref_key)
+        if last is not None and now_ns - last < self.SAME_REF_MIN_INTERVAL_NS:
+            self._last_seen[ref_key] = now_ns
+            return "idempotent"
+        cutoff = now_ns - self.BURST_WINDOW_NS
+        self._window = [(ts, k) for ts, k in self._window if ts > cutoff]
+        distinct = {k for _, k in self._window}
+        if len(distinct) >= max_distinct_per_sec and ref_key not in distinct:
+            return "throttled"
+        self._window.append((now_ns, ref_key))
+        self._last_seen[ref_key] = now_ns
+        return "allow"
+
+    def record_drop(self):
+        self._drops_since_warn += 1
+
+    def take_warn_count(self, now_ns):
+        """Returns the number of drops since the last warn, but at
+        most once per second. ``None`` outside the window so the
+        caller can short-circuit emitting a warn line.
+        """
+        if now_ns - self._last_warn_ns <= self.BURST_WINDOW_NS:
+            return None
+        count = self._drops_since_warn
+        self._drops_since_warn = 0
+        self._last_warn_ns = now_ns
+        return count
 
 
 def sanity_check_external_hook():
@@ -94,6 +161,7 @@ class Controller:
         self._external_ttl_timer = None
         self._nav_event_conn = None
         self._evNewProgramInfo = None
+        self._external_rate_limiter = _ExternalRateLimiter()
 
         Controller._instance = self
 
@@ -255,28 +323,58 @@ class Controller:
             anyway so the slot keeps living)
         A different ref simply overwrites the previous EXTERNAL
         target on the next arm() cycle.
+
+        Defended against caller abuse by ``_ExternalRateLimiter``:
+        same-ref calls within 100 ms collapse, and the distinct-ref
+        burst is capped at ``cfg.external_max_calls_per_sec`` per
+        second. Failures inside this method do NOT increment the
+        plugin watchdog counter - the 3-failure self-disable
+        protects against internal bugs, not against external-caller
+        misuse.
         """
         try:
             if not self._enabled:
                 return
-            # Always refresh the TTL on a call, even when the ref is
-            # already armed - the call itself proves the caller still
-            # wants the slot alive.
+            # Refresh the TTL on every call, even on drop / idempotent
+            # paths - the caller still wants the slot to stay alive
+            # even if we are short-circuiting the arm.
             self._refresh_external_ttl()
+            try:
+                key = _ref_key(ref)
+            except Exception:
+                debug("pretune_external: unprintable ref, dropping")
+                return
+            try:
+                max_per_sec = int(cfg.external_max_calls_per_sec.value)
+            except Exception:
+                max_per_sec = 10
+            verdict = self._external_rate_limiter.classify(
+                key, time.monotonic_ns(), max_per_sec)
+            if verdict == "idempotent":
+                debug("pretune_external idempotent (same ref within 100 ms): %s"
+                      % key)
+                return
+            if verdict == "throttled":
+                self._external_rate_limiter.record_drop()
+                drops = self._external_rate_limiter.take_warn_count(
+                    time.monotonic_ns())
+                if drops is not None:
+                    warn("pretune_external throttled: max %d distinct refs/sec "
+                         "exceeded; dropped %d call(s) since last warn"
+                         % (max_per_sec, drops))
+                return
             existing = self._pool.lookup(ref)
             if existing is not None:
                 debug("pretune_external: ref already armed "
                       "(role=%s), skipping arm" % existing.role.value)
                 return
             self._pool.arm({Role.EXTERNAL: [ref]})
-            try:
-                key = _ref_key(ref)
-            except Exception:
-                key = "<unprintable>"
             info("pretune_external armed ref=%s" % key)
         except Exception as exc:
+            # External-caller induced failures do NOT increment the
+            # watchdog counter - those are someone else's bugs and
+            # must not let a misbehaving companion plugin kill us.
             error("pretune_external: %r" % exc)
-            self._record_failure()
 
     def release_external(self, ref):
         """Release the EXTERNAL pool slot.

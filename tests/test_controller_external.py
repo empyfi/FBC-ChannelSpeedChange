@@ -132,6 +132,8 @@ if not hasattr(_cfg, "external_slot_ttl_min"):
     _cfg.external_slot_ttl_min = ConfigInteger(default=5)
 if not hasattr(_cfg, "prewarm_descrambler_external"):
     _cfg.prewarm_descrambler_external = ConfigYesNo(default=False)
+if not hasattr(_cfg, "external_max_calls_per_sec"):
+    _cfg.external_max_calls_per_sec = ConfigInteger(default=10)
 
 _cfg.allow_pretune.value = True
 _cfg.accept_external_pretune.value = True
@@ -355,6 +357,80 @@ class ExternalSlotLifecycleTests(unittest.TestCase):
         self.assertFalse(rec.stopped,
                          "live ref differs from EXTERNAL - slot must "
                          "stay armed")
+
+    # ---- rate-limit defense ----
+
+    def test_rate_limit_same_ref_in_quick_succession_no_extra_arm(self):
+        """Same ref hammered in a tight loop must collapse: the
+        first call arms, every follow-up within 100 ms reports as
+        'idempotent' inside the limiter and never touches the
+        pool.lookup / arm path.
+        """
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        c.pretune_external(ref)
+        n_after_first = len(_FAKE_NAV.allocations)
+        for _ in range(50):
+            c.pretune_external(ref)
+        self.assertEqual(len(_FAKE_NAV.allocations), n_after_first,
+                         "50 same-ref re-calls must not allocate again")
+
+    def test_rate_limit_burst_drops_calls_over_cap(self):
+        """11 distinct refs in a tight loop with a cap of 10 must
+        leave the 11th unhandled at the controller layer (i.e. no
+        new pool.arm).
+        """
+        c, pool = _make_controller_with_test_pool()
+        _cfg.external_max_calls_per_sec.value = 10
+        try:
+            for i in range(11):
+                c.pretune_external(FakeRef("1:0:1:%d:0:0:0:0:0:0:" % i))
+            armed_keys = {r.toString().split(":")[3]
+                          for r, _ in _FAKE_NAV.allocations}
+            self.assertLessEqual(len(armed_keys), 10,
+                                 "burst cap (10) must drop the 11th "
+                                 "distinct ref in the same window")
+        finally:
+            _cfg.external_max_calls_per_sec.value = 10
+
+    def test_rate_limit_does_not_block_release(self):
+        """Release calls must NOT be rate-limited - dropping a
+        release would leak a slot. The limiter only guards the
+        pretune path.
+        """
+        c, pool = _make_controller_with_test_pool()
+        ref = FakeRef("1:0:1:X:0:0:0:0:0:0:")
+        c.pretune_external(ref)
+        rec = _FAKE_NAV.allocations[0][1]
+        # 20 release calls in a tight loop - all must reach the slot.
+        for _ in range(20):
+            c.release_external(ref)
+        self.assertTrue(rec.stopped,
+                        "release path must not be throttled")
+
+    # ---- watchdog isolation ----
+
+    def test_external_failure_does_not_increment_watchdog(self):
+        """A pretune_external that raises inside the controller must
+        not bump _consecutive_failures. The watchdog protects
+        against internal bugs; external-caller misuse must not
+        trip the 3-failure self-disable.
+        """
+        c, pool = _make_controller_with_test_pool()
+        # Force the pool path to raise so the except branch fires.
+        def raise_arm(plan):
+            raise RuntimeError("simulated external misuse")
+        c._pool.arm = raise_arm
+        failures_before = c._consecutive_failures
+        # Three calls would normally cross the self-disable threshold.
+        for i in range(3):
+            c.pretune_external(FakeRef("1:0:1:%d:0:0:0:0:0:0:" % i))
+        self.assertEqual(c._consecutive_failures, failures_before,
+                         "external failures must NOT touch the "
+                         "internal watchdog counter")
+        self.assertFalse(c._disabled_by_watchdog,
+                         "external failures must NOT trigger the "
+                         "self-disable")
 
 
 if __name__ == "__main__":

@@ -71,6 +71,15 @@ def _initialize():
     # the EXTERNAL slot and follows the same per-direction default-
     # off pattern as the other three.
     cfg.accept_external_pretune = ConfigYesNo(default=True)
+    # Defensive ceiling against a buggy or malicious caller that
+    # would otherwise thrash the recordable allocation path with
+    # rapid rotating service references. 10 distinct refs / second
+    # comfortably covers normal channel-list scroll + NumberZap
+    # typing patterns; anything above is dropped. Not exposed in
+    # setup.xml - power-user editable via /etc/enigma2/settings
+    # only.
+    cfg.external_max_calls_per_sec = ConfigInteger(
+        default=10, limits=(1, 100))
     # TTL is exposed in minutes so the Setup screen shows a human
     # number; the controller multiplies by 60000 before handing it
     # to eTimer. Limits: 1 minute (the lower bound the safety-net

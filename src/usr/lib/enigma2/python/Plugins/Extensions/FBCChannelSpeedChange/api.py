@@ -67,13 +67,17 @@ def PreTuneSingleChannel(service_ref):
     Silent no-op when:
       * the master switch ``cfg.allow_pretune`` is off
       * the external-pretune gate ``cfg.accept_external_pretune``
-        is off (default)
+        is off
       * the controller has not yet started (early boot)
+      * ``service_ref`` is ``None`` or not an ``eServiceReference``-
+        shaped object (defensive against garbage input)
 
-    The controller decides whether to allocate, refresh or skip
-    based on the idempotency rules - this entry point just routes.
-    Returns ``None``.
+    The controller decides whether to allocate, refresh, throttle
+    or skip based on the idempotency rules and the rate limiter -
+    this entry point just routes. Returns ``None``.
     """
+    if not _is_serviceref(service_ref):
+        return
     if not _gate_open():
         return
     c = _controller_provider()
@@ -98,9 +102,12 @@ def ReleaseSingleChannel(service_ref=None):
     unconditionally. Use this when the caller does not track
     which ref it last sent.
 
-    Silent no-op when the gates are off or the controller has
-    not started. Returns ``None``.
+    Silent no-op when the gates are off, the controller has not
+    started, or ``service_ref`` is non-``None`` but not an
+    ``eServiceReference``-shaped object. Returns ``None``.
     """
+    if service_ref is not None and not _is_serviceref(service_ref):
+        return
     if not _gate_open():
         return
     c = _controller_provider()
@@ -110,6 +117,17 @@ def ReleaseSingleChannel(service_ref=None):
         c.release_external(service_ref)
     except Exception as exc:
         error("ReleaseSingleChannel crashed (caught): %r" % exc)
+
+
+def _is_serviceref(obj):
+    """Duck-type check for an ``eServiceReference``-shaped object.
+
+    The public binding's contract is the ``toString()`` method.
+    Garbage input (``None``, primitives, arbitrary objects) is
+    rejected here before reaching the controller / pool layers
+    that would later raise into the SWIG path.
+    """
+    return obj is not None and hasattr(obj, "toString")
 
 
 def _gate_open():
