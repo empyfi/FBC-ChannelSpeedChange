@@ -3,6 +3,62 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] - unreleased
+
+### Added
+- Public Python API at
+  `Plugins.Extensions.FBCChannelSpeedChange.api` for companion
+  plugins (FCC-Extender etc.) that want to feed a service
+  reference into the pre-tune pool. Two entry points,
+  `PreTuneSingleChannel(service_ref)` and
+  `ReleaseSingleChannel(service_ref=None)`, both returning
+  `None`. Calls are silent no-ops when the master switch or the
+  new `accept_external_pretune` toggle is off, or when the
+  controller has not started yet.
+- New `Role.EXTERNAL` pool slot driven exclusively by the api
+  module. Capacity 1 by default, never competes with the
+  internal NEXT / PREV / HISTORY predictor. Convergence with
+  any internal slot (the ref is already armed there) short-
+  circuits the EXTERNAL allocation so a subsequent zap is
+  satisfied through channel-share without a duplicate
+  recordable.
+- TTL safety net for the EXTERNAL slot
+  (`cfg.external_slot_ttl_ms`, default 300000 ms = 5 min).
+  Auto-releases when the companion plugin's explicit release
+  never lands. Long enough that legitimate EPG-read sessions
+  never get torn down mid-read.
+- `evNewProgramInfo` listener that releases the EXTERNAL slot
+  when the live service changes to the armed ref. Covers the
+  shortcut-zap path where `session.nav.playService` is called
+  from outside `ChannelSelection`.
+- Three new ConfigYesNo / ConfigInteger toggles:
+  `accept_external_pretune` (default False, master gate),
+  `external_slot_ttl_ms` (default 300000),
+  `prewarm_descrambler_external` (default False, Pay-TV opt-in
+  for the EXTERNAL slot using the same semantics as the
+  existing three direction toggles).
+- New `External pretune (FCC-Extender)` group in `setup.xml`
+  and matching DE translations in `po/de.po`. The new Pay-TV
+  descrambler row for the EXTERNAL slot sits at the end of the
+  existing Pay-TV group.
+- `sanity_check_external_hook` runs at controller start
+  alongside the pool and arbiter checks. Missing
+  `evNewProgramInfo` enum or `NavigationInstance.event` is
+  critical when `accept_external_pretune` is on (the start
+  path refuses with a popup) and informational otherwise.
+
+### Notes
+- No new C-binding surface. The EXTERNAL slot reuses the
+  existing `recordService → prepare(9-arg) → start()` path
+  proven in v0.4.0 onwards.
+- Public API contract designed for and verified against
+  Oberhesse's FCC-Extender (OpenATV port in progress); the
+  signature is generic enough that any plugin can use it.
+- On VU+ boxes the OpenATV FCC system plugin remains the
+  native fast-zap path. The FCC-Extender routes to FCC there
+  without going through this API; FBC-CSC is typically not
+  needed alongside FCC on the same box. README note added.
+
 ## [0.4.4] - 2026-06-12
 
 ### Changed

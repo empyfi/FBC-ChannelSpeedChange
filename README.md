@@ -241,7 +241,7 @@ box; autotools is for distribution maintainers.
 ## Settings
 
 Reached via the OpenATV plugin browser. The setup screen is grouped
-into five sections; the descriptions below are the same texts the
+into six sections; the descriptions below are the same texts the
 help panel shows when scrolling through the on-box screen.
 
 ### Plugin
@@ -267,6 +267,16 @@ help panel shows when scrolling through the on-box screen.
 | Pre-tune PREVIOUS channel | yes | Sets a tuner to be reserved for the previous channel in the bouquet. If yes, fast Zap when Channel Down. |
 | Pre-tune LAST channel (history) | yes | Sets a tuner to be reserved for the recently watched channel in the bouquet. If yes, fast Zap when tuning to recently watched channel. |
 
+### External pretune (FCC-Extender)
+
+Default off. See the dedicated "FCC-Extender integration" section
+below for the full mechanic.
+
+| Key | Default | Description |
+|---|---|---|
+| Accept external pre-tune calls | no | Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off by default — turn on only when a paired plugin is installed and configured. |
+| External slot TTL (ms, safety net) | 300000 | Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Default 300000 ms (5 min) — long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment. |
+
 ### Pay-TV
 
 Default off for every direction — see the dedicated "Pay-TV
@@ -277,6 +287,7 @@ channels" section below for the full mechanic and trade-offs.
 | Activate descrambler in NEXT pay-TV pre-tune | no | Only for Pay-TV channels after Channel Up: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
 | Activate descrambler in PREVIOUS pay-TV pre-tune | no | Only for Pay-TV channels after Channel Down: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
 | Activate descrambler in LAST pay-TV pre-tune (history) | no | Only for Pay-TV channels on the Recall Button: Activates the descrambler for the relevant tuner so there is no black frame for the first ECM to arrive after channel switch. BUT: Costs one continuous extra decryption session (ECM stream) so be aware when cardsharing or what smartcard/CAM can handle. |
+| Activate descrambler in external pre-tune | no | Only for Pay-TV channels driven by a companion plugin (FCC-Extender etc.): Activates the descrambler for the EXTERNAL tuner so there is no black frame on the first ECM after switch. BUT: Costs one continuous extra decryption session (ECM stream) while the slot is armed — be aware when cardsharing or what smartcard/CAM can handle. |
 
 ### Diagnostics
 
@@ -392,6 +403,87 @@ A zap during timeshift follows the standard fast-bypass path; the
 pre-tune speedup applies as usual. `evInfoChanged` still fires
 from `nav.playService`, so OpenATV's own SaveTimeshift hook and
 permanent-timeshift re-arm continue to work without modification.
+
+## FCC-Extender integration
+
+A small public Python API lets companion plugins feed a service
+reference into a dedicated EXTERNAL pool slot. Designed for and
+verified against Oberhesse's FCC-Extender (in-progress OpenATV
+port), the surface is generic enough that any plugin can use it.
+
+```python
+from Plugins.Extensions.FBCChannelSpeedChange.api import (
+    PreTuneSingleChannel,
+    ReleaseSingleChannel,
+)
+
+PreTuneSingleChannel(service_ref)        # arm or refresh
+ReleaseSingleChannel(service_ref)        # release if slot holds ref
+ReleaseSingleChannel()                   # release whatever is held
+```
+
+Both functions return `None`. The companion plugin does not need
+to track success — failures are caught internally and logged.
+
+**Master gate.** Off by default. Turn on **Accept external
+pre-tune calls** in the Settings UI once a paired plugin is
+installed. With the gate off every API call is a silent no-op,
+so installing FBC-CSC does not change behaviour for users who
+never pair it with a companion plugin.
+
+**Slot model.** The EXTERNAL slot lives alongside NEXT / PREV /
+HISTORY in the same pool but never competes for capacity with
+them — the internal predictor only fills the three internal
+roles. On a GigaBlue (8 demodulators across 2 FBC frontends) the
+fourth concurrent slot is well within budget alongside live TV +
+one recording + optional PiP.
+
+**Idempotency.** A `PreTuneSingleChannel(ref)` call is a no-op
+when:
+
+  * the ref is already armed in NEXT / PREV / HISTORY (the
+    eventual zap is satisfied by channel-share on that slot)
+  * the ref already matches the current EXTERNAL slot
+
+A different ref overwrites the EXTERNAL slot — the previous
+recordable is torn down before the new one is allocated.
+
+**Lifecycle.** Three cleanup paths run side by side, in
+descending priority:
+
+  1. *Explicit release from the companion plugin.* The
+     `ReleaseSingleChannel(ref)` call on a UI close-without-OK
+     is the primary path. With `ref` it is race-safe: a late
+     release does not drop a newer pretune the caller has
+     already overwritten the slot with.
+  2. *`evNewProgramInfo` listener.* When the live service
+     changes to the EXTERNAL slot's ref, the slot is released
+     automatically — covers the case where the eventual zap
+     bypasses the ZapInterceptor (`session.nav.playService`
+     from outside ChannelSelection).
+  3. *TTL safety net.* `external_slot_ttl_ms`, default 5 min.
+     Catches the case where the explicit release never lands
+     (companion plugin crashed, plugin disabled mid-flight,
+     future caller bug). Long enough that legitimate
+     EPG-reading sessions never get torn down mid-read, short
+     enough that a leaked slot does not hold a tuner forever.
+
+A double release (explicit call landing after the
+`evNewProgramInfo` listener already cleaned up) is a no-op —
+the companion does not have to track whether OK was pressed.
+
+**Pay-TV.** The EXTERNAL slot follows the same per-direction
+opt-in pattern as the internal three: **Activate descrambler
+in external pre-tune** is off by default, so the EXTERNAL
+slot's `prepare()` call passes `descramble=False`. The CA path
+stays quiet; channel-share at swap-in still works. Opt-in adds
+one continuous ECM stream while the slot is armed — same
+trade-off as the other three direction toggles.
+
+**VU+ note.** On VU+ boxes the OpenATV FCC system plugin is the
+native fast-zap path. The FCC-Extender routes to FCC there
+without going through this API; FBC-CSC is typically not needed
+alongside FCC on the same box.
 
 ## Pay-TV channels (HD+, Sky, ORF, …)
 

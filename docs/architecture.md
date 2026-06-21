@@ -283,6 +283,117 @@ Worth documenting alongside the v0.4.0 release notes so users
 who only see the black picture do not blame the new plugin
 version.
 
+## External pretune slot
+
+The v0.5.0 EXTERNAL slot is a fourth `Role` in the same pool
+that holds NEXT / PREV / HISTORY. It is filled by the public
+`api` module (`PreTuneSingleChannel` / `ReleaseSingleChannel`)
+rather than by the internal predictor — the EXTERNAL bucket
+never competes with the three internal roles for capacity, and
+the internal predictor never writes to it.
+
+### Lifecycle
+
+```
+                          PreTuneSingleChannel(ref)
+                                     |
+                                     v
+              +--------------------------------------+
+              | api.PreTuneSingleChannel(ref)        |
+              |   gate: cfg.allow_pretune AND        |
+              |         cfg.accept_external_pretune  |
+              +-------------------|------------------+
+                                  |
+                                  v
+              +--------------------------------------+
+              | controller.pretune_external(ref)     |
+              |   1. refresh TTL safety net          |
+              |   2. pool.lookup(ref)                |
+              |        | hit: skip arm (channel      |
+              |        |      share covers it)      |
+              |        | miss:                       |
+              |   3. pool.arm({Role.EXTERNAL:[ref]}) |
+              +-------------------|------------------+
+                                  |
+                                  v
+              +--- EXTERNAL slot ARMED (LOCKED) -----+
+              |                                      |
+              | release paths (any one wins):        |
+              |                                      |
+              |  A) ReleaseSingleChannel(ref)        |
+              |     - companion plugin explicit      |
+              |       close-without-OK signal        |
+              |     - race-safe: only releases when  |
+              |       slot still holds ref           |
+              |                                      |
+              |  B) evNewProgramInfo listener        |
+              |     - fires on every live service    |
+              |       change; releases when live ref |
+              |       matches the EXTERNAL slot      |
+              |     - covers playService outside     |
+              |       ChannelSelection.zap           |
+              |                                      |
+              |  C) TTL expiry                       |
+              |     - external_slot_ttl_ms, default  |
+              |       300000 (5 min)                 |
+              |     - safety net only - the          |
+              |       companion plugin's explicit    |
+              |       release is the primary path    |
+              +--------------------------------------+
+```
+
+### Idempotency and race-safety
+
+Three rules collapse into a single `pool.lookup` call at
+`pretune_external`:
+
+  - ref already armed in NEXT / PREV / HISTORY  -> no-op
+  - ref already armed in EXTERNAL                -> no-op
+  - any other ref in EXTERNAL                     -> overwrite
+
+The TTL refreshes on every call regardless - an idle companion
+plugin can keep the slot alive by re-asserting periodically
+without triggering a re-allocation cycle on the recordable
+side.
+
+`ReleaseSingleChannel(ref)` is race-safe by design. If the
+companion plugin sent `PreTune(A)`, then `PreTune(B)`
+(overwriting A in the slot), and then `Release(A)` (a late
+close-event for the original UI session), the late release is
+silently dropped because the slot no longer holds A. The newer
+B pretune survives. Callers that do not track their own state
+can pass no argument: `ReleaseSingleChannel()` empties the
+slot unconditionally.
+
+### Coexistence with the internal predictor
+
+The internal re-arm cycle runs unchanged. After every zap the
+controller schedules `_do_rearm` ~250 ms later, which fills
+NEXT / PREV / HISTORY based on the live service. The EXTERNAL
+slot is untouched by that path - the predictor does not write
+to it, and the rearm plan does not pass an `EXTERNAL` key.
+
+When the EXTERNAL slot's ref later appears as one of the
+internal predictor's targets (e.g. the companion plugin
+pretuned channel A, then the live service moved and A is now
+NEXT's target), the convergence check in `pretune_external`
+short-circuits: a subsequent `PreTuneSingleChannel(A)` becomes
+a no-op because `pool.lookup(A)` already finds A in NEXT.
+Channel-share covers the zap; no duplicate recordable is
+allocated.
+
+### Sanity check
+
+`sanity_check_external_hook` runs at controller start alongside
+the pool and arbiter checks. It walks two surfaces:
+`enigma.iPlayableService.evNewProgramInfo` (the enum value the
+listener compares against) and `NavigationInstance.instance.event`
+(the subscription list the listener appends to). A missing
+surface is critical when `cfg.accept_external_pretune` is on -
+the controller's `start()` refuses with a popup. With the gate
+off the same missing surface is purely informational, because
+the api module silently no-ops on every call anyway.
+
 ## Two-tier safety opt-in
 
 `cfg.enabled` (default True) — gates the whole controller. Off
