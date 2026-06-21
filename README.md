@@ -411,6 +411,9 @@ reference into a dedicated EXTERNAL pool slot. Designed for and
 verified against Oberhesse's FCC-Extender (in-progress OpenATV
 port), the surface is generic enough that any plugin can use it.
 
+Full reference (signatures, gates, idempotency, rate limits,
+diagnostics): [`docs/api.md`](docs/api.md).
+
 ```python
 from Plugins.Extensions.FBCChannelSpeedChange.api import (
     PreTuneSingleChannel,
