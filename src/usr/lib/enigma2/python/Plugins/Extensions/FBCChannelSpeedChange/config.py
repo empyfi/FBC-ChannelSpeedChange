@@ -58,14 +58,19 @@ def _initialize():
 
     # v0.5.0 external pretune. accept_external_pretune is the master
     # gate for the public api module (PreTuneSingleChannel /
-    # ReleaseSingleChannel); default False so a fresh install does
-    # nothing unless the user opted in. external_slot_ttl_ms is the
-    # safety-net TTL applied when the caller forgets to send a
-    # release - 5 min is long enough that legitimate EPG-read
-    # sessions never get torn down mid-read. prewarm_descrambler_external
-    # carries the Pay-TV behaviour for the EXTERNAL slot and follows
-    # the same per-direction default-off pattern as the other three.
-    cfg.accept_external_pretune = ConfigYesNo(default=False)
+    # ReleaseSingleChannel); default True so a paired companion
+    # plugin (FCC-Extender) just works out of the box. Without such
+    # a companion installed no caller fires the API, so an "on"
+    # default is a no-op for the typical user. The Pay-TV side
+    # (prewarm_descrambler_external) still defaults False, so the
+    # EXTERNAL slot locks the transponder only - no CA load.
+    # external_slot_ttl_min is the safety-net TTL applied when the
+    # caller forgets to send a release - 5 min is long enough that
+    # legitimate EPG-read sessions never get torn down mid-read.
+    # prewarm_descrambler_external carries the Pay-TV behaviour for
+    # the EXTERNAL slot and follows the same per-direction default-
+    # off pattern as the other three.
+    cfg.accept_external_pretune = ConfigYesNo(default=True)
     # TTL is exposed in minutes so the Setup screen shows a human
     # number; the controller multiplies by 60000 before handing it
     # to eTimer. Limits: 1 minute (the lower bound the safety-net

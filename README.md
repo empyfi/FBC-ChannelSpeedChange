@@ -274,7 +274,7 @@ below for the full mechanic.
 
 | Key | Default | Description |
 |---|---|---|
-| Accept external pre-tune calls | no | Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Turn on only when a paired plugin is installed and configured. |
+| Accept external pre-tune calls | yes | Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off: every API call is a silent no-op. |
 | External slot TTL (minutes, safety net) | 5 | Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment. |
 
 ### Pay-TV
@@ -425,11 +425,12 @@ ReleaseSingleChannel()                   # release whatever is held
 Both functions return `None`. The companion plugin does not need
 to track success — failures are caught internally and logged.
 
-**Master gate.** Off by default. Turn on **Accept external
-pre-tune calls** in the Settings UI once a paired plugin is
-installed. With the gate off every API call is a silent no-op,
-so installing FBC-CSC does not change behaviour for users who
-never pair it with a companion plugin.
+**Master gate.** On by default. Without a paired companion
+plugin installed no caller fires the API, so the "on" default
+is a no-op for the typical user; with one installed it just
+works. With the gate off every API call is a silent no-op,
+so a user who knows they will never want the EXTERNAL slot can
+flip **Accept external pre-tune calls** off in the Settings UI.
 
 **Slot model.** The EXTERNAL slot lives alongside NEXT / PREV /
 HISTORY in the same pool but never competes for capacity with

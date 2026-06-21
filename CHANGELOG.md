@@ -34,7 +34,10 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   shortcut-zap path where `session.nav.playService` is called
   from outside `ChannelSelection`.
 - Three new ConfigYesNo / ConfigInteger toggles:
-  `accept_external_pretune` (default False, master gate),
+  `accept_external_pretune` (default True, master gate - a
+  paired companion plugin just works; without one installed
+  no caller fires the API anyway, so the "on" default is a
+  no-op for the typical user),
   `external_slot_ttl_min` (default 5, limits 1..30),
   `prewarm_descrambler_external` (default False, Pay-TV opt-in
   for the EXTERNAL slot using the same semantics as the

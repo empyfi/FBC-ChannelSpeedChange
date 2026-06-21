@@ -50,7 +50,7 @@
     <item text="── External pretune (FCC-Extender) ──"></item>
 
     <item text="Accept external pre-tune calls"
-          description="Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Turn on only when a paired plugin is installed and configured.">config.plugins.fbc_csc.accept_external_pretune</item>
+          description="Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off: every API call is a silent no-op.">config.plugins.fbc_csc.accept_external_pretune</item>
 
     <item text="External slot TTL (minutes, safety net)"
           description="Auto-releases the EXTERNAL slot if the caller forgets to send a release call. Long enough for normal EPG reads, short enough that a leaked slot does not hold a tuner forever. Rarely needs adjustment.">config.plugins.fbc_csc.external_slot_ttl_min</item>

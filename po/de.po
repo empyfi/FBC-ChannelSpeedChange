@@ -112,8 +112,8 @@ msgstr "Stellt ein, ob ein Tuner für den zuletzt gesehenen Sender im Bouquet re
 msgid "Accept external pre-tune calls"
 msgstr "Externe Vorhalte-Aufrufe annehmen"
 
-msgid "Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Turn on only when a paired plugin is installed and configured."
-msgstr "Lässt Begleit-Plugins (z. B. FCC-Extender) eine Sender-Referenz in einen dedizierten EXTERNAL-Slot legen. Nur einschalten, wenn ein passendes Plugin installiert und eingerichtet ist."
+msgid "Lets companion plugins (e.g. FCC-Extender) feed a service reference into a dedicated EXTERNAL pool slot. Off: every API call is a silent no-op."
+msgstr "Lässt Begleit-Plugins (z. B. FCC-Extender) eine Sender-Referenz in einen dedizierten EXTERNAL-Slot legen. Aus: jeder API-Aufruf wird stillschweigend ignoriert."
 
 msgid "External slot TTL (minutes, safety net)"
 msgstr "TTL des externen Slots (Minuten, Sicherheitsnetz)"

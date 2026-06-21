@@ -389,10 +389,12 @@ the pool and arbiter checks. It walks two surfaces:
 `enigma.iPlayableService.evNewProgramInfo` (the enum value the
 listener compares against) and `NavigationInstance.instance.event`
 (the subscription list the listener appends to). A missing
-surface is critical when `cfg.accept_external_pretune` is on -
-the controller's `start()` refuses with a popup. With the gate
-off the same missing surface is purely informational, because
-the api module silently no-ops on every call anyway.
+surface is critical when `cfg.accept_external_pretune` is on
+(default) - the controller's `start()` refuses with a popup so
+the user knows their build does not support the EXTERNAL slot
+path and can flip the gate off explicitly. With the gate off
+the same missing surface is purely informational, because the
+api module silently no-ops on every call anyway.
 
 ## Two-tier safety opt-in
 
