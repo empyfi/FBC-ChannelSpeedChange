@@ -93,7 +93,7 @@ hardware.
   `fallocate(PUNCH_HOLE | KEEP_SIZE)` so the throwaway pre-tune
   `.ts` files do not balloon RAM
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (56 tests at the time of writing)
+  unit-tested off-box (130 tests at the time of writing)
 
 ## Measured performance
 
@@ -269,8 +269,11 @@ help panel shows when scrolling through the on-box screen.
 
 ### External pretune (FCC-Extender)
 
-Default off. See the dedicated "FCC-Extender integration" section
-below for the full mechanic.
+Default on. Without a paired companion plugin installed no
+caller ever fires the API, so the "on" default is a no-op for
+the typical user; with one installed the integration just works.
+See the dedicated "FCC-Extender integration" section below for
+the full mechanic.
 
 | Key | Default | Description |
 |---|---|---|
@@ -483,6 +486,28 @@ slot's `prepare()` call passes `descramble=False`. The CA path
 stays quiet; channel-share at swap-in still works. Opt-in adds
 one continuous ECM stream while the slot is armed — same
 trade-off as the other three direction toggles.
+
+**Settings UI integration.** When the FCC-Extender is installed
+alongside FBC-CSC, both plugins surface the integration in their
+own Settings screens — each side owns its own UX, no runtime
+monkey-patching across plugins:
+
+  * The **External pre-tune (FCC-Extender)** group in this
+    plugin's Settings screen carries a one-line status row
+    underneath the header — `FCC-Extender: installed (v…)` /
+    `not detected` / `status unknown` — read from
+    `/var/lib/opkg/status` at Setup-screen open time.
+  * When the companion plugin is detected, a yellow-button
+    shortcut labelled **FCC Extender** appears at the screen
+    bottom. Pressing it opens the FCC-Extender's Settings
+    screen directly. The button stays out of the action map
+    entirely when the companion is absent, so no host-skin
+    yellow binding is shadowed on installs without the
+    Extender.
+  * The reciprocal path lives on the FCC-Extender side from
+    v0.2 onwards: its own Settings screen offers a yellow
+    button labelled **FBC Settings** that opens this plugin's
+    Settings.
 
 **VU+ note.** On VU+ boxes the OpenATV FCC system plugin is the
 native fast-zap path. The FCC-Extender routes to FCC there
