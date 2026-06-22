@@ -373,12 +373,23 @@ recordings + PiP = 6 of 8 demodulators already in active use:
 
 Free demods vs. slots filled:
 
-| Free demods at re-arm | NEXT | PREV | HISTORY |
-|---|---|---|---|
-| 3 or more | filled | filled | filled |
-| 2 | filled | filled | IDLE |
-| 1 | filled | IDLE | IDLE |
-| 0 | IDLE | IDLE | IDLE |
+| Free demods | NEXT | PREV | HISTORY | EXTERNAL¹ |
+|---|---|---|---|---|
+| 4 or more | filled | filled | filled | filled |
+| 3 | filled | filled | filled | IDLE |
+| 2 | filled | filled | IDLE | IDLE |
+| 1 | filled | IDLE | IDLE | IDLE |
+| 0 | IDLE | IDLE | IDLE | IDLE |
+
+¹ The EXTERNAL slot is filled on demand by the public API (the
+FCC-Extender or any other companion plugin) rather than by the
+rearm cycle that fills NEXT / PREV / HISTORY. The same exhaustion
+rule applies — when no demod is free at the moment the external
+caller fires, `recordService` returns `None` and the EXTERNAL
+slot stays IDLE without error. When the external call targets a
+ref already armed in NEXT / PREV / HISTORY, the convergence-skip
+short-circuits the allocation entirely; EXTERNAL does not steal
+capacity the rearm cycle would otherwise have used.
 
 At full saturation (every demodulator busy) the pool contributes
 nothing — every zap runs at stock OpenATV speed, recordings and
