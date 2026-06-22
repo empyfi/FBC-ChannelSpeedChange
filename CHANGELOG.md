@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.1] - 2026-06-22
+
+### Added
+- Yellow-button shortcut from the Settings screen to the
+  FCC-Extender's own settings, gated on the same opkg-status
+  detection as the existing FCC-Extender presence indicator.
+  The button appears only when the companion plugin is
+  detected; on every other box it stays out of the action map
+  entirely so host-skin yellow bindings are untouched. Replaces
+  the runtime monkey-patch the FCC-Extender used to inject into
+  `FBCChannelSpeedChangeSetup.__init__` in earlier releases —
+  each plugin now owns its own settings surface natively.
+- `_parse_fccextender_status` helper exposing
+  `(state, version)` so the boolean detector and the label
+  formatter share one parser. No behaviour change to the
+  presence-indicator label; six new tests pin the parser and
+  detector contracts.
+
 ## [0.5.0] - 2026-06-21
 
 ### Added

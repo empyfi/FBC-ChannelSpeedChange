@@ -26,20 +26,22 @@ from .logger import error
 _OPKG_STATUS_PATH = "/var/lib/opkg/status"
 
 
-def _classify_fccextender_content(content):
-    """Classify an opkg-status file body into a human-readable label.
+def _parse_fccextender_status(content):
+    """Low-level opkg-status parser. Returns ``(state, version)``
+    where ``state`` is ``"installed"`` or ``"not_detected"`` and
+    ``version`` is the matched ``Version:`` string or ``None``.
 
-    Parses the file in opkg-status format (Package blocks separated
-    by blank lines, each block carries ``Package:`` and ``Version:``
-    key-value lines). When a ``Package:`` line carries an
-    ``fccextender`` / ``fcc-extender`` stem, the matching
-    ``Version:`` line is folded into the rendered label.
+    Splits the body on blank lines (opkg-status block separator).
+    Each block carries ``Package:`` and ``Version:`` key-value
+    lines. A ``Package:`` value with an ``fccextender`` /
+    ``fcc-extender`` stem (substring match, case-insensitive) ends
+    the search.
 
-    The OpenATV port of the FCC-Extender is not yet published; the
-    VTi build's package name is
-    ``enigma2-plugin-extensions-vti-fccextender``. The OpenATV
-    variant will most likely keep the ``fccextender`` stem so a
-    substring match catches whichever exact name lands.
+    The VTi build's exact name is
+    ``enigma2-plugin-extensions-vti-fccextender``; the OpenATV
+    variant published by Oberhesse keeps the ``fccextender`` stem
+    (``enigma2-plugin-extensions-fccextender``). The substring rule
+    catches either spelling and any future stem variant.
     """
     for block in content.split("\n\n"):
         package_name = None
@@ -54,6 +56,16 @@ def _classify_fccextender_content(content):
         lowered = package_name.lower()
         if "fccextender" not in lowered and "fcc-extender" not in lowered:
             continue
+        return ("installed", version)
+    return ("not_detected", None)
+
+
+def _classify_fccextender_content(content):
+    """Render an opkg-status file body into the human-readable
+    presence-indicator label injected into the setup list.
+    """
+    state, version = _parse_fccextender_status(content)
+    if state == "installed":
         if version:
             return _("FCC-Extender: installed (v%s)") % version
         return _("FCC-Extender: installed")
@@ -72,6 +84,24 @@ def _detect_fccextender_status():
         return _classify_fccextender_content(content)
     except Exception:
         return _("FCC-Extender: status unknown")
+
+
+def _fccextender_installed():
+    """Boolean detection used by the yellow-button shortcut. Reads
+    the same opkg-status file as the presence indicator so the
+    button is gated on the same evidence that surfaces the label.
+
+    An I/O failure collapses to ``False`` - safer to omit the
+    button than to render a shortcut that the click handler would
+    silently fail on.
+    """
+    try:
+        with open(_OPKG_STATUS_PATH, "r") as fh:
+            content = fh.read()
+    except Exception:
+        return False
+    state, _version = _parse_fccextender_status(content)
+    return state == "installed"
 
 
 class FBCChannelSpeedChangeSetup(object):
@@ -109,6 +139,7 @@ try:
                 )
             self.setTitle(_("FBC ChannelSpeedChange"))
             self._inject_fccextender_status()
+            self._wire_fccextender_shortcut()
 
         def _inject_fccextender_status(self):
             """Insert a status row right after the External pretune
@@ -141,6 +172,46 @@ try:
                     break
             except Exception as exc:
                 error("_inject_fccextender_status crashed (caught): %r" % exc)
+
+        def _wire_fccextender_shortcut(self):
+            """Register a yellow-button shortcut into the FCC-Extender
+            settings screen, gated on the same opkg-status detection
+            as the presence indicator. Stays out of the action map
+            entirely when the companion plugin is absent so other
+            yellow bindings from a host skin are untouched.
+            """
+            if not _fccextender_installed():
+                return
+            try:
+                from Components.Sources.StaticText import StaticText
+                from Components.ActionMap import HelpableActionMap
+                label = _("FCC Extender")
+                self["key_yellow"] = StaticText(label)
+                self["entryActions"] = HelpableActionMap(
+                    self,
+                    ["ColorActions"],
+                    {"yellow": (self._open_fccextender_setup, label)},
+                    prio=0,
+                    description=label,
+                )
+            except Exception as exc:
+                error("_wire_fccextender_shortcut crashed (caught): %r"
+                      % exc)
+
+        def _open_fccextender_setup(self):
+            """Yellow-button handler. The import is deferred to click
+            time so a manually wiped plugin dir between the gate check
+            and the keypress collapses to a logged no-op instead of a
+            stack trace.
+            """
+            try:
+                from Plugins.Extensions.FCCExtender.plugin import (
+                    FCCExtenderSetup,
+                )
+                self.session.open(FCCExtenderSetup)
+            except Exception as exc:
+                error("opening FCCExtenderSetup failed (caught): %r"
+                      % exc)
 
         def keySave(self):
             # Re-arm the live controller with the new toggles so the
