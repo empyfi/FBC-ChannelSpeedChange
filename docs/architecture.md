@@ -73,6 +73,18 @@ subscribed to. After 1500 ms the slot is assumed locked and HITs
 start serving from it. Field testing shows the actual lock
 completes well within that window.
 
+`_release_slot` runs four independent stages, each in its own
+`try/except`: stop the reclaim timer, stop the recordable, unlink
+the throwaway `.ts` plus its sidecars, reset slot state. A fault
+in any one stage cannot skip the others - in particular the file
+unlink always runs, so a failed `recordable.stop()` cannot leak
+a multi-MB `.ts` file into tmpfs. As a belt-and-suspenders second
+layer, `FBCPreTunePool.__init__` sweeps any leftover
+`/tmp/fbc_csc_pretune_*.ts*` files at startup: the live pool is
+singleton, so anything matching the pattern at init time is by
+definition garbage from a controller that died (e.g. `init 4`
+SIGKILL'd the Python process) before its cleanup completed.
+
 ## Why recordService (and not eFCCServiceManager)
 
 OpenATV 7.6.0 ships `eFCCServiceManager` in `libenigma` but
@@ -461,18 +473,20 @@ The interceptor splits behaviour by hooked method:
   original's playService, so `eDVBResourceManager` still
   channel-shares and the speedup is preserved.
 
-* **External zaps** (history-selector dialog, EPG select,
-  numeric input) bypass the wrappers entirely. The interceptor
-  subscribes to `iPlayableService.evStart` as a fallback timing
-  anchor so the OSD overlay still shows a number for those
-  zaps; the result is labelled `EXT` in the timing CSV and the
-  OSD card is tinted cyan. Unlike `historyBack` / `historyNext`
-  — which reliably HIT the HISTORY pool slot because that slot
-  is always armed against the last-watched channel — an
-  external zap only gets the channel-share speedup if the
-  user-picked target happens to coincide with one of the three
-  armed pool slots. For arbitrary numeric input that match is
-  rare, so most numeric zaps land as cold tunes.
+* **External zaps** (history selector / Last-Channel button,
+  EPG OK, NumberZap OK, FCC-Extender-driven api zap) bypass the
+  wrappers entirely. The interceptor subscribes to
+  `iPlayableService.evStart` as a fallback timing anchor so the
+  OSD overlay still surfaces a latency number for those zaps.
+  At evStart the interceptor probes the pool for the
+  currently-playing ref via the role-agnostic `pool.lookup`: on
+  a match the zap is classified as a genuine `HIT` and bucket-
+  coloured by latency, on a miss it stays labelled `EXT` in
+  neutral cyan. This is the path that catches HISTORY-slot
+  recall via the Last-Channel button (the wrapper does not fire
+  for that path on this OpenATV build), EXTERNAL-slot hits from
+  a companion plugin like the FCC-Extender, and the occasional
+  numeric-zap match against an armed slot.
 
 ## ServiceReference identity normalisation
 
@@ -609,7 +623,10 @@ window stacking on rapid presses.
 
 Colour buckets: green < 200 ms HIT, yellow < 500 ms HIT, orange
 slow HIT or fast MISS, red >= 800 ms MISS, cyan EXT external
-zap.
+zap with no pool match. Bypass zaps that the pool *did* deliver
+(history recall, EXTERNAL-slot channel-share, etc.) are
+classified as HIT at evStart and follow the latency buckets
+above instead of the neutral cyan fallback.
 
 ## Timing CSV
 
@@ -629,6 +646,15 @@ legacy rows are padded with an empty trailing field so column
 counts stay consistent across the whole file. `tools/zap_stats.py`
 summarises the CSV with min / median / mean / max per
 (attr, result).
+
+The CSV rotates at 256 KB with three backups kept
+(`.csv.1`/`.csv.2`/`.csv.3`), mirroring the rename-chain pattern
+in `logger.py`. ~50 bytes per row × 256 KB cap = ~5000 rows per
+segment, so the live file plus three backups preserve roughly
+the last 20000 zaps - far more than any debugging window needs,
+without letting tmpfs growth become a concern over weeks of hard
+zapping. Each rotated segment is rewritten with the canonical
+header so off-box tooling can read each segment independently.
 
 The `evTunedIn` anchor that drives the CSV measures up to demux
 lock, **not** up to the first descrambled frame. On scrambled

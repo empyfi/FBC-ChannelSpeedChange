@@ -88,12 +88,17 @@ hardware.
 - Optional on-screen latency overlay (colour-coded, off by
   default)
 - Per-zap timing CSV (`/tmp/fbc_csc_timing.csv`) with
-  `tools/zap_stats.py` summariser for objective A/B testing
+  `tools/zap_stats.py` summariser for objective A/B testing.
+  The file rotates at 256 KB with three backups
+  (`.csv.1`/`.csv.2`/`.csv.3`), so weeks of hard zapping cannot
+  fill `/tmp`.
 - tmpfs reclaim every 2 seconds via
   `fallocate(PUNCH_HOLE | KEEP_SIZE)` so the throwaway pre-tune
-  `.ts` files do not balloon RAM
+  `.ts` files do not balloon RAM. A startup sweep removes any
+  leftover `.ts*` files from a controller that died before
+  finishing its cleanup.
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (130 tests at the time of writing)
+  unit-tested off-box (144 tests at the time of writing)
 
 ## Measured performance
 
@@ -199,7 +204,7 @@ just landed):
 
 ```sh
 ssh root@<your-box>
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.5.1/enigma2-plugin-extensions-fbc-channelspeedchange_0.5.1_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.5.2/enigma2-plugin-extensions-fbc-channelspeedchange_0.5.2_all.ipk -O /tmp/fbc.ipk
 opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
@@ -780,7 +785,7 @@ The plugin itself never touches the softcam directly.
 
 ## Project status
 
-v0.5.1 is the current build for long-term testing on the GigaBlue
+v0.5.2 is the current build for long-term testing on the GigaBlue
 UHD Quad 4K Pro under OpenATV 7.6.0. Everything in the feature
 table works on this hardware. The pool has survived multiple
 parallel recordings + PiP + rapid-fire zapping for hours without a

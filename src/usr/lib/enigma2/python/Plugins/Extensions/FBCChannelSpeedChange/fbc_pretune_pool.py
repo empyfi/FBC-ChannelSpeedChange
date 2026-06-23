@@ -23,6 +23,10 @@ from enum import Enum
 
 from .logger import info, debug, warn, error
 from .config import cfg as _cfg
+# Single canonical implementation of the serviceref-key normaliser
+# lives in predictor; importing the alias keeps every pool call site
+# unchanged.
+from .predictor import _key as _ref_key
 
 
 _DUMPED_RECORDABLE_API = False
@@ -75,6 +79,13 @@ class FBCPreTunePool:
         self._lock = threading.RLock()
         self._slots_by_role = {}        # Role -> list[PreTuneSlot]
         self._suppressed_roles = set()
+        # Sweep leftovers from a prior controller that died without
+        # finishing _release_slot (most common cause: init 4 SIGKILL'd
+        # the python process during shutdown, before the cleanup ran).
+        # Safe by construction: the live pool is singleton, so any
+        # matching file at init time belongs to a dead instance and is
+        # unreachable garbage.
+        _sweep_stale_pretune_files()
 
     # --- public API -----------------------------------------------------
 
@@ -421,7 +432,7 @@ class FBCPreTunePool:
     @staticmethod
     def _slot_paths(ts_path):
         yield ts_path
-        for suf in (".ap", ".sc", ".cuts", ".meta", ".eit"):
+        for suf in _PRETUNE_TMP_SIDECARS:
             yield ts_path + suf
 
     _PROBED = False
@@ -495,23 +506,32 @@ class FBCPreTunePool:
         return False
 
     def _release_slot(self, slot, keep_object=False):
+        """Tear down a slot. Each stage is wrapped in its own try/except
+        so a fault in one cleanup step (e.g. ``recordable.stop`` raising)
+        cannot skip the others. The file unlink in particular must
+        always run - a leaked /tmp/fbc_csc_pretune_*.ts file holds tmpfs
+        RAM until the next reboot since /tmp is mounted as tmpfs on the
+        box.
+        """
         if slot is None:
             return
+        # Stage 1: stop the tmpfs reclaim timer first; it might fire
+        # mid-cleanup and try to punch a hole in a file about to be
+        # deleted.
         try:
-            # Stop the tmpfs reclaim timer first; it might fire
-            # mid-cleanup and try to punch a hole in a file about to
-            # be deleted.
             if slot._reclaim_timer is not None:
                 try:
                     slot._reclaim_timer.stop()
                 except Exception:
                     pass
                 slot._reclaim_timer = None
+        except Exception as exc:
+            error("release_slot reclaim_timer: %r" % exc)
+        # Stage 2: stop the recordable. If the recording was started
+        # (use_real_pretune path), call stop() before stopRecordService
+        # so the demod is cleanly released and the file handle closes.
+        try:
             if slot.recordable is not None:
-                # If the recording was started (use_real_pretune
-                # path), call stop() before stopRecordService so the
-                # demod is cleanly released and the file handle
-                # closes.
                 if slot._started:
                     try:
                         slot.recordable.stop()
@@ -525,25 +545,22 @@ class FBCPreTunePool:
                     except Exception as exc:
                         debug("stopRecordService on release: %r" % exc)
                 slot.recordable = None
-            # Clean up the throwaway pretune file (if any).
+        except Exception as exc:
+            error("release_slot recordable: %r" % exc)
+        # Stage 3: unlink the throwaway pretune file. Runs unconditionally
+        # so a fault in stage 2 cannot leak the file.
+        try:
             if slot._tmp_file:
-                try:
-                    import os
-                    if os.path.exists(slot._tmp_file):
-                        os.remove(slot._tmp_file)
-                    # also clean up the .ap / .sc / .meta sidecars that
-                    # eDVBServiceRecord may write next to the .ts file
-                    for suf in (".ap", ".sc", ".cuts", ".meta", ".eit"):
-                        side = slot._tmp_file + suf
-                        if os.path.exists(side):
-                            os.remove(side)
-                except OSError as exc:
-                    debug("tmp file cleanup: %r" % exc)
+                _unlink_pretune_file(slot._tmp_file)
                 slot._tmp_file = None
+        except Exception as exc:
+            error("release_slot tmp_file: %r" % exc)
+        # Stage 4: reset slot state so the next arm() cycle can refill it.
+        try:
             slot.service_ref = None
             slot.state = SlotState.IDLE if keep_object else SlotState.RELEASED
         except Exception as exc:
-            error("release_slot failed: %r" % exc)
+            error("release_slot state reset: %r" % exc)
 
     def _dump_recordable_api_once(self, rec):
         global _DUMPED_RECORDABLE_API
@@ -571,15 +588,56 @@ class FBCPreTunePool:
 
 # --- helpers ------------------------------------------------------------
 
-def _ref_key(service_ref):
+
+_PRETUNE_TMP_PREFIX = "fbc_csc_pretune_"
+_PRETUNE_TMP_SIDECARS = (".ap", ".sc", ".cuts", ".meta", ".eit")
+
+
+def _unlink_pretune_file(tmp_path):
+    """Unlink the throwaway .ts pretune file and its eDVBServiceRecord
+    sidecars (.ap / .sc / .cuts / .meta / .eit). Tolerant of missing
+    files and of any unlink error - a failed unlink has nothing useful
+    to do besides log.
+    """
+    import os
+    paths = [tmp_path] + [tmp_path + suf for suf in _PRETUNE_TMP_SIDECARS]
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError as exc:
+            debug("unlink %s: %r" % (path, exc))
+
+
+def _sweep_stale_pretune_files(directory="/tmp"):
+    """Remove leftover /tmp/fbc_csc_pretune_*.ts* files at pool init.
+
+    A prior controller may have died (e.g. ``init 4`` SIGKILL'd the
+    python process during shutdown) before completing ``_release_slot``.
+    The pool is singleton with exclusive ownership of this filename
+    pattern, so at init time any matching file is unreachable garbage
+    by definition.
+
+    Returns the list of paths removed (used by tests).
+    """
+    import glob
+    import os
+    pattern = os.path.join(directory, _PRETUNE_TMP_PREFIX + "*.ts*")
     try:
-        s = service_ref.toString()
-    except AttributeError:
-        s = str(service_ref)
-    parts = s.split(":")
-    if len(parts) >= 11:
-        parts = parts[:10]
-    return ":".join(parts)
+        matches = glob.glob(pattern)
+    except OSError:
+        return []
+    removed = []
+    for path in matches:
+        try:
+            os.remove(path)
+            removed.append(path)
+        except OSError as exc:
+            debug("sweep unlink %s: %r" % (path, exc))
+    if removed:
+        info("startup sweep removed %d stale pretune file(s)"
+             % len(removed))
+    return removed
 
 
 def _punch_hole(path, offset, length):

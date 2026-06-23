@@ -263,10 +263,14 @@ class Controller:
                     return
             self._enabled = True
             self._schedule_rearm(delay_ms=500)
-            info("controller started (next=%s prev=%s last=%s)" % (
+            info("controller started (next=%s prev=%s last=%s; "
+                 "descramble next=%s prev=%s last=%s)" % (
                 bool(cfg.pretune_next.value),
                 bool(cfg.pretune_prev.value),
-                bool(cfg.pretune_history.value)))
+                bool(cfg.pretune_history.value),
+                bool(cfg.prewarm_descrambler_next.value),
+                bool(cfg.prewarm_descrambler_prev.value),
+                bool(cfg.prewarm_descrambler_history.value)))
         except Exception as exc:
             error("controller.start failed: %r" % exc)
             self.stop()

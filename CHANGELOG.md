@@ -3,6 +3,53 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.2] - 2026-06-23
+
+### Fixed
+- OSD overlay and timing CSV now label pool-delivered external
+  zaps honestly. Previously every bypass zap (history selector /
+  Last-Channel button, EPG OK, NumberZap OK, FCC-Extender-driven
+  api zap) was tagged as a neutral cyan `EXT` regardless of
+  whether the pool's channel-share path had actually delivered
+  the speedup. On `evStart` the interceptor now probes the pool
+  for the live ref and, on a match, classifies the zap as `HIT` -
+  so the overlay bucket-colours the same 50-60 ms recall green
+  instead of cyan, and `zap_stats.py` aggregates the `(ext, HIT)`
+  combo as a genuine hit. Bypass zaps without a pool match still
+  surface as `EXT` so the two cases can be told apart.
+
+### Changed
+- `controller started` log line now also reports the three
+  `prewarm_descrambler_*` flags alongside the three `pretune_*`
+  flags, so a fresh boot's descrambler-prewarm state is visible
+  in `/tmp/fbc_csc.log` without grepping `/etc/enigma2/settings`
+  or inspecting the pool's `.ts` files.
+- Single canonical implementation of the serviceref-key
+  normaliser. `fbc_pretune_pool` now imports `_key` from
+  `predictor` instead of carrying its own duplicate `_ref_key`;
+  a future change to the normalisation rule can no longer drift
+  between the two modules.
+- `_release_slot` restructured so each cleanup stage (reclaim
+  timer, recordable stop, file unlink, slot state reset) runs
+  in its own try/except. A fault in any one stage - for example
+  a faulty `recordable.stop()` - no longer skips the others. In
+  particular, the throwaway pre-tune file is now unlinked
+  unconditionally; previously a leaked `.ts` could hold tmpfs
+  RAM until reboot.
+- `/tmp/fbc_csc_timing.csv` is now size-capped at 256 KB with
+  three rotated backups (`.1`/`.2`/`.3`), mirroring the
+  existing `logger.py` rotation pattern. Each rotated segment
+  carries the canonical CSV header so off-box analysis tooling
+  does not have to special-case post-rotation segments.
+
+### Added
+- Startup sweep at `FBCPreTunePool` init removes leftover
+  `/tmp/fbc_csc_pretune_*.ts*` files from a prior controller
+  that died (e.g. `init 4` SIGKILL'd the Python process)
+  before completing `_release_slot`. The pool is singleton with
+  exclusive ownership of this filename pattern, so any matching
+  file at init time is unreachable garbage by definition.
+
 ## [0.5.1] - 2026-06-22
 
 ### Added

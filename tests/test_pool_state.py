@@ -444,6 +444,65 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(slot.role, Role.EXTERNAL)
         self.assertEqual(slot.state, SlotState.LOCKED)
 
+    def test_release_slot_unlinks_file_even_if_recordable_stop_raises(self):
+        """Belt-and-suspenders: a faulty recordable.stop() must not
+        prevent the .ts file unlink. Per-stage isolation in
+        _release_slot keeps each cleanup step independent.
+        """
+        import os
+        import tempfile
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1})
+        pool.arm({Role.NEXT: [FakeRef("1:0:1:A:0:0:0:0:0:0:A")]})
+        slot = pool._slots_by_role[Role.NEXT][0]
+        fd, path = tempfile.mkstemp(prefix="fbc_csc_pretune_test_",
+                                    suffix=".ts")
+        os.close(fd)
+        try:
+            slot._tmp_file = path
+            slot._started = True
+
+            class BoomRecordable(FakeRecordable):
+                def stop(self):
+                    raise RuntimeError("simulated stop failure")
+
+            slot.recordable = BoomRecordable()
+            pool._release_slot(slot, keep_object=True)
+            self.assertFalse(os.path.exists(path),
+                             "tmp file must be unlinked even if "
+                             "recordable.stop raises")
+            self.assertEqual(slot.state, SlotState.IDLE)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_sweep_stale_pretune_files_removes_leftovers(self):
+        """Startup sweep removes leftover pretune files matching the
+        pool's filename pattern, leaves unrelated files alone.
+        """
+        import os
+        import shutil
+        import tempfile
+        from FBCChannelSpeedChange import fbc_pretune_pool as pool_mod
+        d = tempfile.mkdtemp()
+        try:
+            a = os.path.join(d, "fbc_csc_pretune_next_1234567890.ts")
+            b = os.path.join(d, "fbc_csc_pretune_prev_0987654321.ts.ap")
+            c = os.path.join(d, "unrelated_file.ts")
+            for p in (a, b, c):
+                with open(p, "w") as fh:
+                    fh.write("x")
+            removed = pool_mod._sweep_stale_pretune_files(directory=d)
+            self.assertIn(a, removed)
+            self.assertIn(b, removed)
+            self.assertNotIn(c, removed)
+            self.assertFalse(os.path.exists(a))
+            self.assertFalse(os.path.exists(b))
+            self.assertTrue(os.path.exists(c),
+                            "unrelated file must be left alone")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
     def test_external_role_release_after_swap(self):
         """After a HIT on an EXTERNAL slot, release_after_swap brings
         it back to IDLE and stops the recordable, exactly as for the

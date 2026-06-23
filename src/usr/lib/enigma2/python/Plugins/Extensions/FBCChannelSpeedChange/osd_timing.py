@@ -170,8 +170,11 @@ def _bucket_colour(result, delta_ms):
             return "#ff8000"   # orange
         return "#ff4040"       # red
     if result == "EXT":
-        # Neutral cyan: zap that bypassed the wrappers (history
-        # selector, EPG select, numeric input). No pre-tune happened
-        # but the timing is still surfaced for comparison.
+        # Neutral cyan: bypass zap (history selector, EPG select,
+        # NumberZap, FCC-Extender api path) where the pool did NOT
+        # hold the target ref - so channel-share could not deliver
+        # the speedup. The timing is still surfaced for comparison.
+        # Bypass zaps that DID hit a pool slot are labelled HIT
+        # above and bucket-coloured by latency.
         return "#80c0ff"
     return "#cccccc"

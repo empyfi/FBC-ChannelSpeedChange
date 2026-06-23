@@ -22,17 +22,68 @@ from .config import cfg
 
 _TIMING_CSV = "/tmp/fbc_csc_timing.csv"
 
+# Size-capped rename-chain rotation mirroring logger.py. ~50 bytes
+# per zap row * 256 KB cap = ~5000 zaps per backup; with three backups
+# kept the recent ~20000 zaps survive a crash for forensics, while the
+# total tmpfs footprint stays under ~1 MB.
+_CSV_MAX_BYTES = 256 * 1024
+_CSV_BACKUP_COUNT = 3
+
+
+_CSV_HEADER = "epoch,attr,result,delta_ms,target_ref\n"
+_CSV_HEADER_LEGACY = "epoch,attr,result,delta_ms\n"
+
+
+def _rotate_csv():
+    """Rotate the timing CSV: drop the oldest backup, shift each `.N`
+    to `.N+1`, move the current file to `.1`, then write a fresh
+    header into the new live CSV so every rotated segment - and the
+    successor - is self-describing for off-box analysis.
+    """
+    import os
+    oldest = "%s.%d" % (_TIMING_CSV, _CSV_BACKUP_COUNT)
+    try:
+        if os.path.exists(oldest):
+            os.remove(oldest)
+    except OSError:
+        pass
+    for i in range(_CSV_BACKUP_COUNT - 1, 0, -1):
+        src = "%s.%d" % (_TIMING_CSV, i)
+        dst = "%s.%d" % (_TIMING_CSV, i + 1)
+        try:
+            if os.path.exists(src):
+                os.rename(src, dst)
+        except OSError:
+            pass
+    try:
+        if os.path.exists(_TIMING_CSV):
+            os.rename(_TIMING_CSV, _TIMING_CSV + ".1")
+    except OSError:
+        pass
+    try:
+        with open(_TIMING_CSV, "w") as fh:
+            fh.write(_CSV_HEADER)
+    except OSError:
+        pass
+
+
+def _rotate_csv_if_large():
+    import os
+    try:
+        if (os.path.exists(_TIMING_CSV)
+                and os.path.getsize(_TIMING_CSV) > _CSV_MAX_BYTES):
+            _rotate_csv()
+    except OSError:
+        pass
+
 
 def _emit_csv(row):
+    _rotate_csv_if_large()
     try:
         with open(_TIMING_CSV, "a") as fh:
             fh.write(",".join(str(c) for c in row) + "\n")
     except OSError:
         pass
-
-
-_CSV_HEADER = "epoch,attr,result,delta_ms,target_ref\n"
-_CSV_HEADER_LEGACY = "epoch,attr,result,delta_ms\n"
 
 
 def _ensure_csv_header():
@@ -359,21 +410,51 @@ class ZapInterceptor:
     def _on_nav_event(self, reason):
         try:
             if reason == self._evStart:
-                # If no WRAP has set the start timestamp yet, this is an
-                # external zap (history-selector dialog, EPG, numeric
-                # input). Use evStart as the timing anchor instead so
-                # the OSD overlay still shows a number.
+                # If no WRAP has set the start timestamp yet, this is
+                # an external zap (history selector / Last-Channel
+                # button, EPG OK, NumberZap OK, FCC-Extender-driven
+                # api zap, etc). Use evStart as the timing anchor so
+                # the OSD overlay still surfaces a latency number.
+                # Also probe the pool: if a slot currently holds the
+                # ref enigma2 just started, channel-share is what
+                # delivered the speedup and the zap is a genuine HIT
+                # - the OSD bucket-colour reflects that instead of
+                # always falling back to the neutral EXT label.
                 if self._zap_start_ns is None:
                     self._zap_start_ns = time.monotonic_ns()
                     self._zap_attr = "ext"
-                    self._zap_hit = None
-                    debug("NAV evStart - timing anchor set for external zap")
+                    self._zap_hit = self._pool_hit_for_current_service()
+                    if self._zap_hit:
+                        debug("NAV evStart - pool delivered ext zap (HIT)")
+                    else:
+                        debug("NAV evStart - timing anchor set for "
+                              "external zap (no pool hit)")
             elif reason == self._evTunedIn:
                 self._record_zap_timing()
                 debug("NAV evTunedIn (external or post-zap)")
                 self._notify_zap()
         except Exception as exc:
             error("_on_nav_event: %r" % exc)
+
+    def _pool_hit_for_current_service(self):
+        """Returns True if the pool currently holds a matching slot
+        for the live service ref. Used at evStart on the bypass path
+        so the OSD / CSV can label pool-delivered external zaps
+        (history recall, EPG OK on armed slot, FCC-Extender hit)
+        honestly as HIT rather than the neutral EXT fallback.
+        """
+        try:
+            import NavigationInstance
+            nav = NavigationInstance.instance
+            if nav is None:
+                return False
+            ref = nav.getCurrentlyPlayingServiceReference()
+            if ref is None:
+                return False
+            return self._pool.lookup(ref) is not None
+        except Exception as exc:
+            debug("_pool_hit_for_current_service: %r" % exc)
+            return False
 
     def _record_zap_timing(self):
         start = self._zap_start_ns
@@ -386,11 +467,16 @@ class ZapInterceptor:
             delta_ms = (time.monotonic_ns() - start) / 1_000_000.0
             attr = self._zap_attr or "?"
             hit = self._zap_hit
-            # External zaps (history selector, EPG, numeric input)
-            # come through evStart with attr='ext' and no hit/miss
-            # label; surfaced as EXT in the timing log and OSD.
+            # External zaps (history selector / Last-Channel button,
+            # EPG OK, NumberZap OK, FCC-Extender-driven api zap) come
+            # through evStart with attr='ext'. Pool lookup on evStart
+            # set hit=True when a slot held the ref and channel-share
+            # delivered the speedup; in that case label HIT so the
+            # OSD bucket-colours by latency and the CSV reflects the
+            # pool's contribution. hit=False means genuine bypass
+            # with no pool involvement - keep the neutral EXT label.
             if attr == "ext":
-                hit_str = "EXT"
+                hit_str = "HIT" if hit else "EXT"
             else:
                 hit_str = "HIT" if hit else ("MISS" if hit is False else "?")
             # Query the currently-playing service reference at this

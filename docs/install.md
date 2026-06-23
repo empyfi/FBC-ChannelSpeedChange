@@ -37,7 +37,7 @@ The receiver needs internet access; everything else happens via SSH.
 ssh root@<your-box-ip>
 
 # 1. Grab the latest IPK from GitHub
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.5.1/enigma2-plugin-extensions-fbc-channelspeedchange_0.5.1_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.5.2/enigma2-plugin-extensions-fbc-channelspeedchange_0.5.2_all.ipk -O /tmp/fbc.ipk
 
 # 2. Install
 opkg install /tmp/fbc.ipk
@@ -66,7 +66,7 @@ In a healthy install the log shows lines like:
 
 ```
 [info] arbiter started
-[info] controller started (next=True prev=True last=True)
+[info] controller started (next=True prev=True last=True; descramble next=False prev=False last=False)
 [info] FBCChannelSpeedChange session_start ok
 [info] interceptor started
 [info] ZAP_TIMING attr=zapDown result=HIT delta_ms=122.4
@@ -92,6 +92,9 @@ to get a min / median / mean / max table per direction. The
 script is intentionally not part of the IPK so that the package
 stays minimal; it talks to `/tmp/fbc_csc_timing.csv` which the
 plugin always writes regardless of the script being present.
+The CSV rotates at 256 KB the same way `fbc_csc.log` does (three
+backups kept: `.csv.1` / `.csv.2` / `.csv.3`); when reporting a
+zap-perception bug, attach the live CSV plus the backups.
 
 ## Optional: enable the on-screen latency overlay
 
