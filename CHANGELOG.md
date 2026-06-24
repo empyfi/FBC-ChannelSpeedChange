@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.3] - 2026-06-23
+
+### Added
+- New `NEAR` result label for the intra-TP channel-share case.
+  When a bypass zap targets a service whose transponder is
+  already locked by a sibling pool slot (different service id
+  on the same MUX), `pool.lookup` correctly misses at the
+  service level but `eDVBResourceManager` channel-shares at the
+  transponder level - the demod is already there, so the zap
+  lands in the ~100-300 ms PMT-switch regime instead of the
+  ~700-900 ms cold-tune regime. Previously these zaps were
+  labelled `EXT` and dragged the EXT-bucket median artificially
+  low; they now report as `NEAR` with their own OSD bucket-
+  colour (teal). Wrapper-MISS paths get the same upgrade when
+  a TP-share is available. Adds `pool.tp_match(ref)` as the
+  transponder-level partner of the existing `pool.lookup`.
+
+### Changed
+- Wrapper-path zap timing now anchors on `evStart` (same as the
+  bypass path) instead of at the top of the wrapper closure.
+  The wrapper sets `_zap_attr` / `_zap_hit` up front so the
+  metadata is known by the time `evStart` fires; the timing
+  anchor itself is set by `_on_nav_event(evStart)` for every
+  path. Net effect: wrapper-HIT and bypass-HIT measurements
+  now cover the same `evStart -> evTunedIn` span, eliminating
+  the ~50 ms measurement gap where `zapUp/zapDown HIT` looked
+  artificially slower than `ext HIT` in v0.5.2.
+
 ## [0.5.2] - 2026-06-23
 
 ### Fixed

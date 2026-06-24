@@ -91,14 +91,15 @@ def _install_nav(fake_nav):
 class _StubInterceptor:
     """Minimal stand-in for ZapInterceptor that carries just the fields
     `_record_zap_timing` reads. Avoids pulling InfoBar / Session /
-    osd_timing into the unit-test surface so the (ext, hit) -> hit_str
-    mapping can be exercised in isolation.
+    osd_timing into the unit-test surface so the (ext, hit, near) ->
+    hit_str mapping can be exercised in isolation.
     """
 
     def __init__(self):
         self._zap_start_ns = 0
         self._zap_attr = None
         self._zap_hit = None
+        self._zap_near = False
         self._on_zap = None
         self._infobar = None
         self.emitted_rows = []
@@ -131,11 +132,12 @@ class ExtZapLabelMapping(unittest.TestCase):
         except OSError:
             pass
 
-    def _call_record(self, attr, hit):
+    def _call_record(self, attr, hit, near=False):
         stub = _StubInterceptor()
         stub._zap_start_ns = 1  # any non-None monotonic value
         stub._zap_attr = attr
         stub._zap_hit = hit
+        stub._zap_near = near
         zi.ZapInterceptor._record_zap_timing(stub)
         return stub
 
@@ -148,18 +150,45 @@ class ExtZapLabelMapping(unittest.TestCase):
                          "label as HIT, not EXT")
 
     def test_ext_without_pool_hit_keeps_EXT(self):
-        stub = self._call_record(attr="ext", hit=False)
+        stub = self._call_record(attr="ext", hit=False, near=False)
         self.assertEqual(len(stub._osd_calls), 1)
         _attr, hit_str, _delta = stub._osd_calls[0]
         self.assertEqual(hit_str, "EXT",
                          "genuine bypass with no pool match keeps "
                          "the neutral EXT label")
 
+    def test_ext_with_tp_match_labels_as_NEAR(self):
+        """Bypass zap: pool.lookup miss but pool.tp_match hit ->
+        NEAR (intra-TP channel-share via sibling slot).
+        """
+        stub = self._call_record(attr="ext", hit=False, near=True)
+        self.assertEqual(stub._osd_calls[0][1], "NEAR")
+
+    def test_wrapper_miss_with_tp_match_labels_as_NEAR(self):
+        """Wrapper zapDown predictor returned None or pool empty
+        -> hit=False. If a sibling slot is on the same transponder
+        as the live ref, the cold-tune fallback path still benefits
+        from channel-share. Label NEAR, not MISS.
+        """
+        stub = self._call_record(attr="zapDown", hit=False, near=True)
+        self.assertEqual(stub._osd_calls[0][1], "NEAR")
+
+    def test_wrapper_miss_without_tp_match_labels_as_MISS(self):
+        stub = self._call_record(attr="zapDown", hit=False, near=False)
+        self.assertEqual(stub._osd_calls[0][1], "MISS")
+
+    def test_hit_takes_priority_over_near(self):
+        """If both hit and near are True (would not happen in
+        practice - hit precludes near probing - but worth pinning),
+        HIT must win.
+        """
+        stub = self._call_record(attr="ext", hit=True, near=True)
+        self.assertEqual(stub._osd_calls[0][1], "HIT")
+
     def test_wrapped_zap_unaffected(self):
-        """Sanity guard: zapUp/zapDown HIT/MISS path is untouched."""
-        for hit, expected in ((True, "HIT"), (False, "MISS")):
-            stub = self._call_record(attr="zapDown", hit=hit)
-            self.assertEqual(stub._osd_calls[0][1], expected)
+        """Sanity guard: zapUp/zapDown HIT path is untouched."""
+        stub = self._call_record(attr="zapDown", hit=True)
+        self.assertEqual(stub._osd_calls[0][1], "HIT")
 
 
 class PoolHitDetection(unittest.TestCase):
@@ -241,6 +270,151 @@ class PoolHitDetection(unittest.TestCase):
         self.assertFalse(ic._zap_hit,
                          "evStart on a genuine bypass (no pool "
                          "match) must stay non-HIT")
+
+
+class TpMatchDetection(unittest.TestCase):
+    """v0.5.3 NEAR detection: pool.tp_match returns True when any
+    slot is locked on the same transponder, even when no slot holds
+    the exact service ref. eDVBResourceManager channel-shares at
+    the transponder level, so the actual latency is intra-TP not
+    cold cross-TP. Label as NEAR instead of EXT/MISS.
+    """
+
+    def _make_pool(self, armed_ref):
+        pool = FBCPreTunePool(
+            nav_provider=lambda: FakeNav(),
+            nim_manager_provider=lambda: FakeNimManager(),
+        )
+        pool.configure({Role.NEXT: 1})
+        if armed_ref is not None:
+            pool.arm({Role.NEXT: [armed_ref]})
+            pool._mark_locked_optimistic(
+                pool._slots_by_role[Role.NEXT][0])
+        return pool
+
+    def test_tp_match_same_transponder_different_service(self):
+        """ZDF (3F3) and ZDF Neo (3F3) share transponder 3F3 even
+        though their service ids differ (2B66 vs 2B7A). tp_match
+        must catch this case.
+        """
+        pool = self._make_pool(
+            armed_ref=FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:"))  # ZDF
+        target = FakeRef("1:0:19:2B7A:3F3:1:C00000:0:0:0:")        # ZDF Neo
+        self.assertTrue(pool.tp_match(target))
+
+    def test_tp_match_returns_false_on_different_transponder(self):
+        pool = self._make_pool(
+            armed_ref=FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:"))
+        target = FakeRef("1:0:1:445F:453:1:C00000:0:0:0:")  # WELT, tp 453
+        self.assertFalse(pool.tp_match(target))
+
+    def test_tp_match_returns_false_on_empty_pool(self):
+        pool = self._make_pool(armed_ref=None)
+        target = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")
+        self.assertFalse(pool.tp_match(target))
+
+    def test_tp_match_returns_false_on_none(self):
+        pool = self._make_pool(
+            armed_ref=FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:"))
+        self.assertFalse(pool.tp_match(None))
+
+
+class NearOnEvStart(unittest.TestCase):
+    """Wire-up test for the NEAR classification path inside
+    _on_nav_event.
+    """
+
+    def _make_pool(self, armed_ref):
+        pool = FBCPreTunePool(
+            nav_provider=lambda: FakeNav(),
+            nim_manager_provider=lambda: FakeNimManager(),
+        )
+        pool.configure({Role.NEXT: 1})
+        if armed_ref is not None:
+            pool.arm({Role.NEXT: [armed_ref]})
+            pool._mark_locked_optimistic(
+                pool._slots_by_role[Role.NEXT][0])
+        return pool
+
+    def _make_interceptor(self, pool, nav):
+        _install_nav(nav)
+        ic = zi.ZapInterceptor(pool=pool, predictor=None)
+        ic._evStart = 1
+        ic._evTunedIn = 6
+        return ic
+
+    def test_bypass_near_when_pool_tp_matches(self):
+        """No wrapper bracketed, pool.lookup miss, but pool.tp_match
+        hit -> _zap_near True, _zap_hit False, attr=ext.
+        """
+        armed = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")  # ZDF (tp 3F3)
+        target = FakeRef("1:0:19:2B7A:3F3:1:C00000:0:0:0:")  # ZDF Neo (3F3)
+        nav = FakeNav(current_ref=target)
+        pool = self._make_pool(armed_ref=armed)
+        ic = self._make_interceptor(pool, nav)
+        ic._zap_start_ns = None
+        ic._zap_attr = None
+        ic._on_nav_event(1)  # evStart
+        self.assertEqual(ic._zap_attr, "ext")
+        self.assertFalse(ic._zap_hit,
+                         "service-level lookup must miss (different service id)")
+        self.assertTrue(ic._zap_near,
+                        "transponder-level fallback must match - "
+                        "ZDF and ZDF Neo share tp 3F3")
+
+    def test_bypass_ext_when_no_tp_match(self):
+        """No wrapper bracketed, pool.lookup miss, pool.tp_match
+        miss -> hit and near both False; result will be EXT.
+        """
+        armed = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")
+        target = FakeRef("1:0:1:445F:453:1:C00000:0:0:0:")  # WELT, different tp
+        nav = FakeNav(current_ref=target)
+        pool = self._make_pool(armed_ref=armed)
+        ic = self._make_interceptor(pool, nav)
+        ic._zap_start_ns = None
+        ic._zap_attr = None
+        ic._on_nav_event(1)
+        self.assertEqual(ic._zap_attr, "ext")
+        self.assertFalse(ic._zap_hit)
+        self.assertFalse(ic._zap_near)
+
+    def test_wrapper_miss_with_tp_match_upgrades_to_near(self):
+        """Wrapper-tracked path with hit=False, tp_match True ->
+        evStart upgrades _zap_near to True. attr stays as
+        wrapper-set (zapDown), not overwritten to ext.
+        """
+        armed = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")
+        target = FakeRef("1:0:19:2B7A:3F3:1:C00000:0:0:0:")
+        nav = FakeNav(current_ref=target)
+        pool = self._make_pool(armed_ref=armed)
+        ic = self._make_interceptor(pool, nav)
+        ic._zap_start_ns = None
+        ic._zap_attr = "zapDown"  # wrapper bracketed
+        ic._zap_hit = False
+        ic._on_nav_event(1)
+        self.assertEqual(ic._zap_attr, "zapDown",
+                         "wrapper-set attr must NOT be overwritten "
+                         "to ext when wrapper bracketed first")
+        self.assertFalse(ic._zap_hit)
+        self.assertTrue(ic._zap_near,
+                        "wrapper-MISS with TP-share must upgrade to NEAR")
+
+    def test_wrapper_hit_skips_near_probe(self):
+        """Wrapper already set hit=True; evStart should not probe
+        tp_match (would be wasted work and could mislabel).
+        """
+        armed = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")
+        target = FakeRef("1:0:19:2B66:3F3:1:C00000:0:0:0:")
+        nav = FakeNav(current_ref=target)
+        pool = self._make_pool(armed_ref=armed)
+        ic = self._make_interceptor(pool, nav)
+        ic._zap_start_ns = None
+        ic._zap_attr = "zapDown"
+        ic._zap_hit = True
+        ic._on_nav_event(1)
+        self.assertTrue(ic._zap_hit)
+        self.assertFalse(ic._zap_near,
+                         "near flag must stay False when hit is True")
 
 
 if __name__ == "__main__":

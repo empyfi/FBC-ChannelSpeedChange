@@ -8,6 +8,9 @@ is enough:
     yellow  < 500 ms    HIT - decoder or descrambling cost dominated
     orange  < 800 ms    HIT but heavy, or fast MISS
     red    >= 800 ms    MISS - fell back to the standard zap path
+    teal               NEAR - intra-TP channel-share (different service,
+                              same transponder as an armed slot)
+    cyan               EXT  - bypass cold tune, no pool involvement
 
 Implementation: a single Screen instance via
 session.instantiateDialog(); each zap calls show()/hide() on the
@@ -165,6 +168,14 @@ def _bucket_colour(result, delta_ms):
         if delta_ms < 500:
             return "#ffff00"   # yellow
         return "#ff8000"       # orange
+    if result == "NEAR":
+        # Teal: intra-TP channel-share. Different service than any
+        # armed slot but the demod is already locked on the right
+        # transponder via a sibling slot. Latency profile sits
+        # between HIT and EXT (~100-300 ms typical). One colour
+        # regardless of delta_ms - NEAR is by construction always
+        # the fast intra-TP regime.
+        return "#80ffc0"
     if result == "MISS":
         if delta_ms < 800:
             return "#ff8000"   # orange
@@ -172,9 +183,10 @@ def _bucket_colour(result, delta_ms):
     if result == "EXT":
         # Neutral cyan: bypass zap (history selector, EPG select,
         # NumberZap, FCC-Extender api path) where the pool did NOT
-        # hold the target ref - so channel-share could not deliver
-        # the speedup. The timing is still surfaced for comparison.
+        # hold the target ref AND no slot is locked on the right
+        # transponder - so channel-share could not deliver the
+        # speedup. The timing is still surfaced for comparison.
         # Bypass zaps that DID hit a pool slot are labelled HIT
-        # above and bucket-coloured by latency.
+        # above; intra-TP-shared bypass zaps are labelled NEAR.
         return "#80c0ff"
     return "#cccccc"

@@ -155,6 +155,25 @@ def _key(ref):
     return ":".join(parts)
 
 
+def _tp_key(ref):
+    """Transponder identity from a service-ref. Parts 4-6
+    (tsid : onid : namespace) uniquely identify the transponder; the
+    service id (part 3) is what differs between services on the same
+    multiplex. eDVBResourceManager channel-shares at the transponder
+    level, so two services with the same _tp_key share a demod lock
+    once one is tuned - even when the full _key does not match.
+    Returns an empty string for non-DVB / malformed refs.
+    """
+    try:
+        s = ref.toString()
+    except AttributeError:
+        s = str(ref)
+    parts = s.split(":")
+    if len(parts) >= 7:
+        return ":".join(parts[4:7])
+    return ""
+
+
 def _extract_ref(entry):
     """History entries vary across OpenATV versions:
         * plain eServiceReference

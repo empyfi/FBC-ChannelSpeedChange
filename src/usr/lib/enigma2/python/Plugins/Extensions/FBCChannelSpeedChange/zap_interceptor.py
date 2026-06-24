@@ -195,13 +195,19 @@ class ZapInterceptor:
         self._infobar = None
         self._wrapped = []  # list of (obj, attr, original)
         self._nav_event_conn = None
-        # In-flight zap timing: set when a WRAP wrapper fires,
-        # cleared when the matching evTunedIn arrives. Allows
-        # end-to-end zap latency computation without depending on
-        # infobar event hooks.
+        # In-flight zap timing. The wrapper sets ``_zap_attr`` /
+        # ``_zap_hit`` up front so the path/outcome is known by the
+        # time the actual playService dispatches evStart; the timing
+        # anchor itself is set by ``_on_nav_event`` when evStart
+        # fires, so wrapper-path and bypass-path measurements both
+        # cover the same evStart -> evTunedIn span. ``_zap_near``
+        # captures the intra-TP channel-share case where lookup
+        # returned None (no service-level match) but the demod is
+        # already locked on the right transponder via another slot.
         self._zap_start_ns = None
         self._zap_attr = None
         self._zap_hit = None
+        self._zap_near = False
 
     def start(self, infobar):
         self._infobar = infobar
@@ -286,9 +292,15 @@ class ZapInterceptor:
         fast_path_attrs = ("zapUp", "zapDown")
 
         def wrapper(*args, **kwargs):
-            interceptor._zap_start_ns = time.monotonic_ns()
+            # Reset the in-flight state and let evStart anchor the
+            # timing once the actual playService dispatches it. The
+            # wrapper's job is to set attr / hit metadata; the timing
+            # anchor lives at evStart so wrapper-HIT and bypass-HIT
+            # measurements cover the same evStart -> evTunedIn span.
+            interceptor._zap_start_ns = None
             interceptor._zap_attr = attr
             interceptor._zap_hit = None
+            interceptor._zap_near = False
             debug("WRAP %s fired (args=%d kwargs=%d)" % (attr, len(args), len(kwargs)))
 
             slot_to_release = None
@@ -410,25 +422,38 @@ class ZapInterceptor:
     def _on_nav_event(self, reason):
         try:
             if reason == self._evStart:
-                # If no WRAP has set the start timestamp yet, this is
-                # an external zap (history selector / Last-Channel
-                # button, EPG OK, NumberZap OK, FCC-Extender-driven
-                # api zap, etc). Use evStart as the timing anchor so
-                # the OSD overlay still surfaces a latency number.
-                # Also probe the pool: if a slot currently holds the
-                # ref enigma2 just started, channel-share is what
-                # delivered the speedup and the zap is a genuine HIT
-                # - the OSD bucket-colour reflects that instead of
-                # always falling back to the neutral EXT label.
                 if self._zap_start_ns is None:
                     self._zap_start_ns = time.monotonic_ns()
-                    self._zap_attr = "ext"
-                    self._zap_hit = self._pool_hit_for_current_service()
-                    if self._zap_hit:
-                        debug("NAV evStart - pool delivered ext zap (HIT)")
+                    if self._zap_attr is None:
+                        # Pure bypass zap: no wrapper bracketed
+                        # (history selector / Last-Channel button,
+                        # EPG OK, NumberZap OK, FCC-Extender api).
+                        # Probe the pool service-level first, then
+                        # the transponder-level fallback so the
+                        # intra-TP channel-share case shows up as
+                        # NEAR instead of EXT.
+                        self._zap_attr = "ext"
+                        self._zap_hit = self._pool_hit_for_current_service()
+                        if not self._zap_hit:
+                            self._zap_near = self._pool_tp_match_for_current_service()
+                        if self._zap_hit:
+                            debug("NAV evStart - bypass HIT (pool service-match)")
+                        elif self._zap_near:
+                            debug("NAV evStart - bypass NEAR (intra-TP channel-share)")
+                        else:
+                            debug("NAV evStart - bypass EXT (cold tune)")
                     else:
-                        debug("NAV evStart - timing anchor set for "
-                              "external zap (no pool hit)")
+                        # Wrapper bracketed this zap. attr / hit are
+                        # already set; just probe TP-match so a
+                        # wrapper-MISS that happens to land on an
+                        # intra-TP-shared transponder gets the NEAR
+                        # upgrade instead of MISS.
+                        if not self._zap_hit:
+                            self._zap_near = self._pool_tp_match_for_current_service()
+                        debug("NAV evStart - wrapper-tracked %s "
+                              "(hit=%s near=%s)" % (
+                                  self._zap_attr, self._zap_hit,
+                                  self._zap_near))
             elif reason == self._evTunedIn:
                 self._record_zap_timing()
                 debug("NAV evTunedIn (external or post-zap)")
@@ -456,6 +481,29 @@ class ZapInterceptor:
             debug("_pool_hit_for_current_service: %r" % exc)
             return False
 
+    def _pool_tp_match_for_current_service(self):
+        """Returns True if any pool slot is armed on the same
+        transponder as the live service ref - even when the service
+        ref itself does not match. eDVBResourceManager channel-shares
+        at the transponder level, so an intra-TP zap to a different
+        service on an already-locked transponder skips the DVB-S2
+        acquisition cycle and lands in the ~100-200 ms PMT-switch
+        regime, not the ~700-900 ms cold-tune regime. Caller maps
+        the result to the NEAR label.
+        """
+        try:
+            import NavigationInstance
+            nav = NavigationInstance.instance
+            if nav is None:
+                return False
+            ref = nav.getCurrentlyPlayingServiceReference()
+            if ref is None:
+                return False
+            return self._pool.tp_match(ref)
+        except Exception as exc:
+            debug("_pool_tp_match_for_current_service: %r" % exc)
+            return False
+
     def _record_zap_timing(self):
         start = self._zap_start_ns
         if start is None:
@@ -467,18 +515,23 @@ class ZapInterceptor:
             delta_ms = (time.monotonic_ns() - start) / 1_000_000.0
             attr = self._zap_attr or "?"
             hit = self._zap_hit
-            # External zaps (history selector / Last-Channel button,
-            # EPG OK, NumberZap OK, FCC-Extender-driven api zap) come
-            # through evStart with attr='ext'. Pool lookup on evStart
-            # set hit=True when a slot held the ref and channel-share
-            # delivered the speedup; in that case label HIT so the
-            # OSD bucket-colours by latency and the CSV reflects the
-            # pool's contribution. hit=False means genuine bypass
-            # with no pool involvement - keep the neutral EXT label.
-            if attr == "ext":
-                hit_str = "HIT" if hit else "EXT"
+            near = self._zap_near
+            # Four-way classification. Service-level pool match is
+            # the headline HIT regardless of path. NEAR captures the
+            # intra-TP channel-share case where lookup found nothing
+            # at service level but a slot is locked on the same
+            # transponder, so eDVBResourceManager delivers an
+            # intra-TP PMT switch instead of a cold tune. EXT is the
+            # bypass-path cold-tune label; MISS is the wrapper-path
+            # cold-tune label - same physics, different provenance.
+            if hit:
+                hit_str = "HIT"
+            elif near:
+                hit_str = "NEAR"
+            elif attr == "ext":
+                hit_str = "EXT"
             else:
-                hit_str = "HIT" if hit else ("MISS" if hit is False else "?")
+                hit_str = "MISS" if hit is False else "?"
             # Query the currently-playing service reference at this
             # point - evTunedIn has fired, the service is locked at
             # demux level. Capturing the ref per row lets off-box
@@ -498,6 +551,7 @@ class ZapInterceptor:
             self._zap_start_ns = None
             self._zap_attr = None
             self._zap_hit = None
+            self._zap_near = False
 
     def _update_bookkeeping(self, ref):
         """Replicate the parts of servicelist.zap() bypassed by the

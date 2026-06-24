@@ -478,15 +478,29 @@ The interceptor splits behaviour by hooked method:
   wrappers entirely. The interceptor subscribes to
   `iPlayableService.evStart` as a fallback timing anchor so the
   OSD overlay still surfaces a latency number for those zaps.
-  At evStart the interceptor probes the pool for the
-  currently-playing ref via the role-agnostic `pool.lookup`: on
-  a match the zap is classified as a genuine `HIT` and bucket-
-  coloured by latency, on a miss it stays labelled `EXT` in
-  neutral cyan. This is the path that catches HISTORY-slot
-  recall via the Last-Channel button (the wrapper does not fire
-  for that path on this OpenATV build), EXTERNAL-slot hits from
-  a companion plugin like the FCC-Extender, and the occasional
-  numeric-zap match against an armed slot.
+  At evStart the interceptor probes the pool in two passes: first
+  the service-level `pool.lookup` for a genuine `HIT` (channel-
+  share at the service level, OSD bucket-coloured green/yellow
+  by latency), then the transponder-level `pool.tp_match`
+  fallback. A TP-match without a service-level match becomes
+  `NEAR` - the demod is already locked on the right transponder
+  via a sibling slot so `eDVBResourceManager` channel-shares at
+  the transponder level, but the service id differs; latency
+  sits at ~100-300 ms (PMT switch only). Bypass zaps that match
+  neither pass stay labelled `EXT` in neutral cyan. Same logic
+  catches the HISTORY-slot recall via the Last-Channel button
+  (the wrapper does not fire for that path on this OpenATV
+  build), EXTERNAL-slot hits from a companion plugin like the
+  FCC-Extender, and intra-MUX zaps where the user happens to
+  pick a sibling service on an armed transponder.
+
+* **Wrapper-tracked paths** (`zapUp`, `zapDown`, `historyBack`,
+  `historyNext`) set `_zap_attr` / `_zap_hit` metadata up front
+  but let the **same** `evStart` handler anchor the timing.
+  Result: every code path - wrapper-HIT, wrapper-MISS, bypass
+  HIT/NEAR/EXT - measures the same `evStart -> evTunedIn` span.
+  Wrapper-MISS gets the same NEAR upgrade as bypass when a
+  TP-share is available.
 
 ## ServiceReference identity normalisation
 
@@ -622,11 +636,12 @@ the same instance and reset a 1500 ms auto-hide timer — no
 window stacking on rapid presses.
 
 Colour buckets: green < 200 ms HIT, yellow < 500 ms HIT, orange
-slow HIT or fast MISS, red >= 800 ms MISS, cyan EXT external
-zap with no pool match. Bypass zaps that the pool *did* deliver
-(history recall, EXTERNAL-slot channel-share, etc.) are
-classified as HIT at evStart and follow the latency buckets
-above instead of the neutral cyan fallback.
+slow HIT or fast MISS, red >= 800 ms MISS, teal NEAR (intra-TP
+channel-share), cyan EXT external zap with no pool match. Bypass
+zaps that the pool *did* deliver (history recall, EXTERNAL-slot
+channel-share, etc.) are classified as HIT at evStart and follow
+the latency buckets above; intra-TP-but-service-mismatch zaps
+become NEAR; only genuine cold-tunes fall through to EXT.
 
 ## Timing CSV
 

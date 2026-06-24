@@ -25,8 +25,9 @@ from .logger import info, debug, warn, error
 from .config import cfg as _cfg
 # Single canonical implementation of the serviceref-key normaliser
 # lives in predictor; importing the alias keeps every pool call site
-# unchanged.
-from .predictor import _key as _ref_key
+# unchanged. _tp_key is the transponder-level partner used by
+# tp_match() for intra-TP channel-share detection.
+from .predictor import _key as _ref_key, _tp_key
 
 
 _DUMPED_RECORDABLE_API = False
@@ -159,6 +160,31 @@ class FBCPreTunePool:
                     if matched and match is None:
                         match = slot
         return match
+
+    def tp_match(self, service_ref):
+        """Returns True if any LOCKED/TUNING slot is armed on the same
+        transponder as ``service_ref`` - even when the service ref
+        itself does not match any slot (the case ``lookup`` would
+        miss). Used by the interceptor at evStart to classify intra-TP
+        channel-share zaps that lookup labels EXT but actually deliver
+        intra-TP latency through eDVBResourceManager's transponder-
+        level share.
+        """
+        if service_ref is None:
+            return False
+        target_tp = _tp_key(service_ref)
+        if not target_tp:
+            return False
+        with self._lock:
+            for slots in self._slots_by_role.values():
+                for slot in slots:
+                    if slot.service_ref is None:
+                        continue
+                    if slot.state not in (SlotState.LOCKED, SlotState.TUNING):
+                        continue
+                    if _tp_key(slot.service_ref) == target_tp:
+                        return True
+        return False
 
     def confirm_hit(self, service_ref):
         """Look up a matching pre-tuned slot. Returns the slot on a hit,
