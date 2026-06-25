@@ -195,6 +195,26 @@ def _dump_all():
     except Exception as exc:
         error("iRecordableService import: %r" % exc)
 
+    _section("pNavigation RecordType enum")
+    try:
+        from enigma import pNavigation
+        _members(pNavigation, "pNavigation(class)")
+        # Specifically report the RecordType constants the pool uses
+        # for the indicator-style ConfigSelection. Missing constants
+        # here are why the choices-filter at config-setup time may
+        # omit "hidden" or fall back to "recorded".
+        for name in ("isRealRecording", "isStreaming", "isPseudoRecording",
+                     "isUnknownRecording", "isFromTimer",
+                     "isFromInstantRecording", "isFromEPGrefresh",
+                     "isFromSpecialJumpFastZap", "isAnyRecording"):
+            try:
+                v = getattr(pNavigation, name)
+                info("  pNavigation.%s = %r" % (name, v))
+            except AttributeError:
+                info("  pNavigation.%s <not present>" % name)
+    except Exception as exc:
+        error("pNavigation import: %r" % exc)
+
     _section("iPlayableService event constants")
     try:
         from enigma import iPlayableService

@@ -98,7 +98,7 @@ hardware.
   leftover `.ts*` files from a controller that died before
   finishing its cleanup.
 - Dependency-injected enigma2 APIs so the codebase can be
-  unit-tested off-box (156 tests at the time of writing)
+  unit-tested off-box (162 tests at the time of writing)
 
 ## Measured performance
 
@@ -204,7 +204,7 @@ just landed):
 
 ```sh
 ssh root@<your-box>
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.5.3/enigma2-plugin-extensions-fbc-channelspeedchange_0.5.3_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.6.0/enigma2-plugin-extensions-fbc-channelspeedchange_0.6.0_all.ipk -O /tmp/fbc.ipk
 opkg install /tmp/fbc.ipk
 init 4 && sleep 2 && init 3
 ```
@@ -302,6 +302,7 @@ channels" section below for the full mechanic and trade-offs.
 | Key | Default | Description |
 |---|---|---|
 | Show zap latency OSD | no | Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow). |
+| Pre-tune indicator in channel list | Light blue (pseudo recording) | How pre-tuned services appear in the channel list. Light blue: visible but distinct from a real recording (default). Hidden: no indicator at all (requires enigma2 7.4+). Red: same colour as a real recording (the pre-v0.6.0 behaviour). |
 | Verbose debug logging | no | Writes detailed traces to `/tmp/fbc_csc.log`. Only useful for bug reports — leave off in normal use. |
 
 ## How it works
@@ -785,21 +786,44 @@ The plugin itself never touches the softcam directly.
 
 ## Project status
 
-v0.5.3 is the current build for long-term testing on the GigaBlue
+v0.6.0 is the current build for long-term testing on the GigaBlue
 UHD Quad 4K Pro under OpenATV 7.6.0. Everything in the feature
 table works on this hardware. The pool has survived multiple
 parallel recordings + PiP + rapid-fire zapping for hours without a
 crash, the watchdog never had to self-disable, and the timing data
 is reproducible across reboots.
 
-A note on the channel-list highlight: pretuned services appear in
-red in the channel list because they are technically active
-recordings (the only working pretune path on this build).
-Distinguishing them from real recordings would require a skin-level
-change; see `docs/architecture.md` for the rationale. When a real
-recording starts, the arbiter releases the matching demodulator
-immediately, so the red highlight never lies — it always reflects
-a busy demodulator.
+### Why are some services blue (or red, or invisible)?
+
+Pre-tune slots are technically `iRecordableService` instances —
+that is the only practically usable pre-tune path on Broadcom-FBC
+boxes — so the channel-list painter classifies them via enigma2's
+`pNavigation::RecordType` enum. v0.6.0 picks the tag explicitly
+via the **Pre-tune indicator in channel list** setting in the
+Diagnostics group:
+
+- **Light blue** (default, *pseudo*): tagged as
+  `isPseudoRecording`, the painter renders the entry with
+  `colorServicePseudoRecorded` — visually distinct from a real
+  recording but clearly marked "this slot is holding a tuner".
+- **Hidden** (*hidden*): tagged as `isFromSpecialJumpFastZap`,
+  no painter mask matches, the entry looks like any normal idle
+  service. Requires enigma2 7.4+; the choice is filtered out of
+  the dropdown on older builds.
+- **Red** (*recorded*): tagged as `isUnknownRecording`, painted
+  the same red as a real recording. This was the pre-v0.6.0
+  behaviour, kept for users who liked the "tuner busy" signal.
+
+The tag also propagates to OpenWebif / `/api/statusinfo` /
+`/timer` REST: with the default *pseudo* tag, pre-tune slots no
+longer show up as active recordings. When a real recording
+starts, the arbiter releases the matching demodulator
+immediately, so whichever colour the user picked never lies — it
+always reflects a busy demodulator until the moment recording
+takes over.
+
+Changing the setting takes effect on the next re-arm cycle — one
+zap after the change.
 
 ## License
 

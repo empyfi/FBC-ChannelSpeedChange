@@ -39,7 +39,7 @@ class FakeNav:
         self.played = []
         self.allocations = []
 
-    def recordService(self, ref):
+    def recordService(self, ref, simulate=False, type=None):
         rec = _FakeRecordable()
         self.allocations.append((ref, rec))
         return rec

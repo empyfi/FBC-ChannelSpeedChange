@@ -53,7 +53,7 @@ class FakeNav:
     def getCurrentlyPlayingServiceReference(self):
         return self._live_ref
 
-    def recordService(self, ref):
+    def recordService(self, ref, simulate=False, type=None):
         rec = _FakeRecordable()
         self.allocations.append((ref, rec))
         return rec

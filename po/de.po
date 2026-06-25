@@ -170,6 +170,21 @@ msgstr "Umschaltzeit am Bildschirm anzeigen"
 msgid "Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow)."
 msgstr "Zeigt nach jedem Umschalten eine kleine Anzeige mit der gemessenen Schaltzeit in Millisekunden (grün = schnell, rot = langsam)."
 
+msgid "Pre-tune indicator in channel list"
+msgstr "Markierung der Vorhalte-Sender in der Senderliste"
+
+msgid "How pre-tuned services appear in the channel list. Light blue: visible but distinct from a real recording (default). Hidden: no indicator at all (requires enigma2 7.4+). Red: same colour as a real recording (the pre-v0.6.0 behaviour)."
+msgstr "Wie die vorgehaltenen Sender in der Senderliste markiert werden. Hellblau: sichtbar, aber von einer echten Aufnahme unterscheidbar (Standard). Versteckt: keine Markierung (benötigt enigma2 7.4+). Rot: gleiche Farbe wie bei einer echten Aufnahme (Verhalten vor v0.6.0)."
+
+msgid "Light blue (pseudo recording)"
+msgstr "Hellblau (Pseudo-Aufnahme)"
+
+msgid "Hidden"
+msgstr "Versteckt"
+
+msgid "Red (treated as recording)"
+msgstr "Rot (wie echte Aufnahme)"
+
 msgid "Verbose debug logging"
 msgstr "Ausführliches Debug-Log"
 

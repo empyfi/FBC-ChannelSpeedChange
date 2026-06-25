@@ -3,6 +3,71 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] - 2026-06-25
+
+### Added
+- New ConfigSelection `pretune_indicator_style` in the Diagnostics
+  group of the Settings screen, with three choices for how
+  pre-tuned services appear in the channel list:
+  - `pseudo` (default): the entry is rendered with
+    `colorServicePseudoRecorded` - light blue on stock skins,
+    visually distinct from a real recording but still clearly
+    "this slot is holding a tuner".
+  - `hidden`: tagged as `isFromSpecialJumpFastZap` so no indicator
+    mask matches at all - the entry looks like any normal idle
+    service. Requires enigma2 7.4+ (the constant is filtered out
+    of the dropdown on older builds).
+  - `recorded`: keeps the pre-v0.6.0 behaviour - tagged as
+    `isUnknownRecording` so the painter renders it the same red
+    as a real recording. Kept for users who liked the old visual
+    signal that "a tuner is busy on this channel".
+  Choice changes take effect on the next re-arm cycle (i.e. after
+  one zap). The setup-screen description spells out the enigma2
+  version requirement for the "Hidden" choice.
+
+### Changed
+- The pool's `recordService` call now uses the canonical 3-arg
+  Python signature `recordService(ref, simulate=False,
+  type=<RecordType>)` instead of the implicit 1-arg form. Default
+  type was previously `isUnknownRecording`, which the channel-list
+  painter (`eListboxServiceContent`) treats as a real recording
+  and paints red. With v0.6.0's `pseudo` default the pool passes
+  `isPseudoRecording`, so external recording counters
+  (`getRealRecordingsCount`, OpenWebif "Recording list",
+  `/api/statusinfo isRecording`) no longer report pre-tune slots
+  as recordings - confirmed end-to-end on the test bench.
+- `_kick_real_tune` now passes a per-role identifier as the
+  `name` / `description` / `tags` arguments of `prepare()`
+  ("FBC-CSC NEXT pretune" etc.) instead of empty strings. The
+  recordable surfaces through any external UI that lists active
+  recordings (OpenWebif, `/timer` REST endpoint, any
+  `getRecordings(isAnyRecording)` consumer) with a clear,
+  attributable label. No change to descrambler / channel-share /
+  swap-in semantics; same 9-arg `prepare()` signature, only the
+  three previously-empty string slots are populated.
+
+### Notes
+- Field-tested on the GigaBlue UHD Quad 4K Pro (openatv 7.6.0,
+  `git35118+befedea0`): rc1 IPK deployed via `opkg install
+  --force-reinstall`, restart cycle clean, both pre-tune slots
+  transitioned to LOCKED state, no new sidecar suffixes (only the
+  five known `.ts`/`.meta`/`.sc`/`.ap`/`.cuts`/`.eit`),
+  `/api/statusinfo isRecording=false` with two armed slots,
+  zero warn/error regressions. Channel-list visual confirmed
+  blue under default settings; toggle round-trip through
+  `hidden` and `recorded` confirmed against the live channel
+  list. Zap latency unchanged: 4 sample zaps median 123.6 ms vs
+  v0.5.3 baseline 128 ms (ext HIT) - well within measurement
+  noise.
+- pNavigation RecordType enum verified live via diagnostic.py
+  dump on the test build: all nine constants exposed,
+  `isFromSpecialJumpFastZap = 128` present, matching openatv's
+  `lib/nav/core.h` on the 7.6 branch.
+- 6 new tests in `tests/test_pool_state.py` covering each
+  indicator-style value (`pseudo`/`hidden`/`recorded`) and the
+  defensive fallback paths for missing pNavigation constants.
+  Tests 156 -> 162 green.
+
 ## [0.5.3] - 2026-06-23
 
 ### Added

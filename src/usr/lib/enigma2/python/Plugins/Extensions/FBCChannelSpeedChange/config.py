@@ -3,10 +3,41 @@ from Components.config import (
     ConfigSubsection,
     ConfigYesNo,
     ConfigInteger,
+    ConfigSelection,
 )
+from . import _
 
 PLUGIN_NAME = "FBCChannelSpeedChange"
 LOG_PATH = "/tmp/fbc_csc.log"
+
+
+def _indicator_choices_and_default():
+    """Build (choices, default) for pretune_indicator_style.
+
+    Filters the dropdown to entries the running enigma2 actually
+    exposes via pNavigation. Missing constants vanish from the
+    choices list rather than appearing as broken options; the
+    setup.xml description mentions which build is required for the
+    full set.
+
+    Default: "pseudo" (light blue indicator) when available,
+    otherwise "recorded" (the pre-v0.6.0 status quo - same red
+    highlight as before this option existed).
+    """
+    try:
+        from enigma import pNavigation
+    except ImportError:
+        return [("recorded", _("Red (treated as recording)"))], "recorded"
+
+    has_pseudo = hasattr(pNavigation, "isPseudoRecording")
+    has_fastzap = hasattr(pNavigation, "isFromSpecialJumpFastZap")
+    choices = []
+    if has_pseudo:
+        choices.append(("pseudo", _("Light blue (pseudo recording)")))
+    if has_fastzap:
+        choices.append(("hidden", _("Hidden")))
+    choices.append(("recorded", _("Red (treated as recording)")))
+    return choices, ("pseudo" if has_pseudo else "recorded")
 
 
 def _initialize():
@@ -94,6 +125,21 @@ def _initialize():
     # Off by default to avoid extra widgets stacked on top of the
     # InfoBar.
     cfg.show_osd_timing = ConfigYesNo(default=False)
+
+    # Pretune slots are technically iRecordableService instances, so
+    # the channel-list painter colours them like a recording. This
+    # toggle picks which RecordType flag the pool tags them with:
+    #   - pseudo:   colorServicePseudoRecorded (light blue) - visible
+    #               but distinct from a real recording (default)
+    #   - hidden:   isFromSpecialJumpFastZap, no painter mask matches,
+    #               no indicator at all (requires enigma2 >= 7.4)
+    #   - recorded: isUnknownRecording, current red highlight - the
+    #               pre-v0.6.0 behaviour, kept for users who want it
+    # Choices missing from the running enigma2 are filtered out at
+    # ConfigSelection construction; see _indicator_choices_and_default.
+    _indicator_choices, _indicator_default = _indicator_choices_and_default()
+    cfg.pretune_indicator_style = ConfigSelection(
+        default=_indicator_default, choices=_indicator_choices)
 
     cfg.debug_log = ConfigYesNo(default=False)
 

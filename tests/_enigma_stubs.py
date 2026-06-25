@@ -33,6 +33,11 @@ def _build_components_config():
             super().__init__(default)
             self.limits = limits
 
+    class ConfigSelection(_ConfigValue):
+        def __init__(self, default, choices):
+            super().__init__(default)
+            self.choices = choices
+
     class ConfigNothing:
         """Non-editable placeholder used by setup.xml group separators."""
 
@@ -58,6 +63,7 @@ def _build_components_config():
     cfg_mod.ConfigSubsection = ConfigSubsection
     cfg_mod.ConfigYesNo = ConfigYesNo
     cfg_mod.ConfigInteger = ConfigInteger
+    cfg_mod.ConfigSelection = ConfigSelection
     cfg_mod.ConfigNothing = ConfigNothing
     sys.modules["Components"] = pkg
     sys.modules["Components.config"] = cfg_mod
@@ -113,9 +119,28 @@ def _build_enigma():
         def __repr__(self):
             return "eServiceReference(%r)" % self._s
 
+    class pNavigation:
+        """RecordType bitmask enum, mirrors openatv 7.6 lib/nav/core.h.
+
+        Verified on-box 2026-06-25 via diagnostic.py dump. Tests that
+        want to simulate an older build with the FastZap constant
+        missing should ``delattr(pNavigation, 'isFromSpecialJumpFastZap')``
+        before reloading the plugin's config module.
+        """
+        isRealRecording          = 1
+        isStreaming              = 2
+        isPseudoRecording        = 4
+        isUnknownRecording       = 8
+        isFromTimer              = 16
+        isFromInstantRecording   = 32
+        isFromEPGrefresh         = 64
+        isFromSpecialJumpFastZap = 128
+        isAnyRecording           = 255
+
     mod.eTimer = eTimer
     mod.iPlayableService = iPlayableService
     mod.eServiceReference = eServiceReference
+    mod.pNavigation = pNavigation
     sys.modules["enigma"] = mod
     return mod
 

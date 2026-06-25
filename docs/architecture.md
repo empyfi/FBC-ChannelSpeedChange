@@ -119,8 +119,85 @@ prepare(filename, begin, end, eit_event_id,
 verified against `openatv/enigma2` branch `7.6`
 `lib/python/RecordTimer.py` line 1547 (`RecordTimerEntry.prepare`).
 `begin`, `end`, `eit_event_id` are zero; `name`, `description`,
-`tags` are empty strings; `record_ecm` is `False`. The `descramble`
-argument is the per-direction flag described in the next section.
+`tags` carry a per-role identifier ("FBC-CSC NEXT pretune" etc.)
+so external recording consumers (OpenWebif, `/timer` REST endpoint)
+can attribute the recordable; `record_ecm` is `False`. The
+`descramble` argument is the per-direction flag described in the
+next section.
+
+## RecordType classification and channel-list paint colour
+
+The recordable is allocated via the canonical 3-arg form
+
+```
+NavigationInstance.recordService(ref, simulate=False,
+                                 type=<pNavigation.RecordType>)
+```
+
+with `simulate=False` and `type` chosen by the
+`pretune_indicator_style` ConfigSelection. The
+`pNavigation::RecordType` enum is a bitmask defined in
+`lib/nav/core.h`:
+
+```
+isRealRecording          =   1
+isStreaming              =   2
+isPseudoRecording        =   4
+isUnknownRecording       =   8
+isFromTimer              =  16
+isFromInstantRecording   =  32
+isFromEPGrefresh         =  64
+isFromSpecialJumpFastZap = 128
+isAnyRecording           = 255
+```
+
+The channel-list painter (`eListboxServiceContent::paint()`)
+selects the indicator colour by checking the recording's type
+against three independent masks:
+
+```
+red    = (type & (isRealRecording | isUnknownRecording)) != 0
+blue   = (type & isPseudoRecording)                      != 0
+orange = (type & isStreaming)                            != 0
+```
+
+Both stock skins on the test bench (GradientFHD and MetrixHD)
+declare `colorServiceRecorded` (red), `colorServicePseudoRecorded`
+(light blue) and `colorServiceStreamed` (orange) on the
+ChannelSelection listbox widget, so the painter has the full
+three-way palette without any skin patching.
+
+Mapping from `pretune_indicator_style` to the type bit:
+
+| Choice     | Type sent                  | Channel-list paint |
+|------------|----------------------------|--------------------|
+| `pseudo`   | `isPseudoRecording`  (=4)  | light blue (default) |
+| `hidden`   | `isFromSpecialJumpFastZap` (=128) | no indicator |
+| `recorded` | `isUnknownRecording` (=8)  | red (pre-v0.6.0 behaviour) |
+
+The same type flag also affects `getRealRecordingsCount` and
+`getIndicatorRecordingsCount`, so external code that polls
+`NavigationInstance` for active recordings (OpenWebif's
+`isRecording`/`Recording_list`, the deep-standby check) honours
+the classification too. With the default `pseudo` tag, pretune
+slots are not counted as real recordings by any of these
+consumers.
+
+The choices-list passed to `ConfigSelection` is filtered at
+config-init time: if the running enigma2 build does not expose
+`isFromSpecialJumpFastZap`, the "Hidden" entry is omitted from
+the dropdown entirely; if `isPseudoRecording` is also missing,
+only "Red" remains and becomes the forced default. The
+`_indicator_type()` helper in `fbc_pretune_pool` carries a
+runtime fallback for the same edge case: a user-saved value that
+points to a missing constant degrades to `isUnknownRecording`
+(the pre-v0.6.0 red behaviour) rather than throwing.
+
+A config change to `pretune_indicator_style` takes effect on the
+next re-arm cycle — the type flag is set at `recordService`
+time, so existing armed slots keep their old classification
+until they get released and rearmed. In practice this means one
+zap delay after the user clicks Save.
 
 ## Descrambler behaviour and pay-TV channels
 

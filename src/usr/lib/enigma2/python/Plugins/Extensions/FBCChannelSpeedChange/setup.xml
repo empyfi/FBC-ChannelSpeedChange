@@ -74,6 +74,9 @@
     <item text="Show zap latency OSD"
           description="Shows a small overlay after each zap with the measured switch time in milliseconds (green = fast, red = slow).">config.plugins.fbc_csc.show_osd_timing</item>
 
+    <item text="Pre-tune indicator in channel list"
+          description="How pre-tuned services appear in the channel list. Light blue: visible but distinct from a real recording (default). Hidden: no indicator at all (requires enigma2 7.4+). Red: same colour as a real recording (the pre-v0.6.0 behaviour).">config.plugins.fbc_csc.pretune_indicator_style</item>
+
     <item text="Verbose debug logging"
           description="Writes detailed traces to /tmp/fbc_csc.log. Only useful for bug reports - leave off in normal use.">config.plugins.fbc_csc.debug_log</item>
 

@@ -33,6 +33,40 @@ from .predictor import _key as _ref_key, _tp_key
 _DUMPED_RECORDABLE_API = False
 
 
+def _indicator_type():
+    """Resolve cfg.pretune_indicator_style to the pNavigation enum.
+
+    The recordService 3-arg form takes a RecordType bitmask that the
+    channel-list painter (eListboxServiceContent) reads to decide the
+    indicator colour:
+        isUnknownRecording (8) -> red
+        isPseudoRecording  (4) -> light blue
+        isFromSpecialJumpFastZap (128) -> no indicator at all
+
+    Resolution is done at allocate-time rather than at config-init so
+    a config change takes effect on the next re-arm cycle without a
+    plugin restart. Defensive fallback chain: if the user-saved value
+    points to a constant the running enigma2 does not expose (rare -
+    only if a build was downgraded after the value was saved), or if
+    pNavigation cannot be imported (tests, exotic forks), the call
+    degrades to isUnknownRecording (current red behaviour) rather
+    than throwing.
+    """
+    try:
+        from enigma import pNavigation
+    except ImportError:
+        return 0
+    try:
+        style = _cfg.pretune_indicator_style.value
+    except Exception:
+        style = "recorded"
+    name = {"hidden": "isFromSpecialJumpFastZap",
+            "pseudo": "isPseudoRecording",
+            "recorded": "isUnknownRecording"}.get(style, "isUnknownRecording")
+    return getattr(pNavigation, name,
+                   getattr(pNavigation, "isUnknownRecording", 0))
+
+
 class Role(Enum):
     NEXT = "next"
     PREV = "prev"
@@ -291,7 +325,10 @@ class FBCPreTunePool:
             debug("no FBC-capable slot configured; skipping pre-tune")
             return
         try:
-            rec = nav.recordService(target_ref)
+            # 3-arg recordService: (ref, simulate=False, type=RecordType).
+            # The type flag drives the channel-list paint colour for
+            # this recordable - see _indicator_type() above.
+            rec = nav.recordService(target_ref, False, _indicator_type())
             if rec is None:
                 info("recordService returned None for %s" % target_ref.toString())
                 return
@@ -373,8 +410,17 @@ class FBCPreTunePool:
         tmp = "/tmp/fbc_csc_pretune_%s_%d.ts" % (slot.role.value, int(time.time() * 1000))
         slot._tmp_file = tmp
         descramble = self._direction_descramble(slot.role)
+        # name / description / tags are passed through to the
+        # iServiceInformation surface and surfaces in any external UI
+        # that enumerates active recordings (OpenWebif, /timer REST
+        # endpoint, recording-list overlays). Per-role name lets pool
+        # inspection identify which slot holds which ref. ASCII-only
+        # and short to avoid any C++ truncation surprise.
+        name = "FBC-CSC %s pretune" % slot.role.value.upper()
+        desc = "Plugin background tune; not a user recording."
+        tags = "fbc-csc-pretune"
         try:
-            err = rec.prepare(tmp, 0, 0, 0, "", "", "", descramble, False)
+            err = rec.prepare(tmp, 0, 0, 0, name, desc, tags, descramble, False)
             debug("pretune prepare role=%s descramble=%s file=%s err=%r" % (
                 slot.role.value, descramble, tmp, err))
             if err:

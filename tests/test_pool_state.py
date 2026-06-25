@@ -52,11 +52,13 @@ class FakeNav:
     def __init__(self):
         self.played = []
         self.allocations = []  # list of (ref, recordable)
+        self.record_args = []  # list of (ref, simulate, type) tuples
         self.stopped = []
 
-    def recordService(self, ref):
+    def recordService(self, ref, simulate=False, type=None):
         rec = FakeRecordable()
         self.allocations.append((ref, rec))
+        self.record_args.append((ref, simulate, type))
         return rec
 
     def stopRecordService(self, rec):
@@ -189,7 +191,7 @@ class PoolTests(unittest.TestCase):
                 self.played = []
                 self.allocations = []
                 self.stopped = []
-            def recordService(self, ref):
+            def recordService(self, ref, simulate=False, type=None):
                 rec = FakeRecordable()
                 self.allocations.append((ref, rec))
                 return rec
@@ -311,6 +313,12 @@ class PoolTests(unittest.TestCase):
                              "prepare must be called with the 9-arg form")
             self.assertTrue(rec.prepare_args[0].startswith("/tmp/fbc_csc_pretune_"),
                             "prepare must receive a non-empty /tmp path")
+            # Per-role identifying strings - lets OpenWebif /
+            # active-recordings consumers attribute the recordable.
+            self.assertEqual(rec.prepare_args[4], "FBC-CSC NEXT pretune")
+            self.assertEqual(rec.prepare_args[5],
+                             "Plugin background tune; not a user recording.")
+            self.assertEqual(rec.prepare_args[6], "fbc-csc-pretune")
             self.assertFalse(rec.prepare_args[7],
                              "descramble defaults False so the CA path stays disengaged")
             self.assertFalse(rec.prepare_args[8],
@@ -371,6 +379,107 @@ class PoolTests(unittest.TestCase):
             _cfg.prewarm_descrambler_prev.value = False
             _cfg.use_real_pretune.value = False
 
+    def test_indicator_style_default_passes_pseudo_record_type(self):
+        """Default pretune_indicator_style is 'pseudo' so the painter
+        renders the entry with colorServicePseudoRecorded (light blue)
+        instead of the red colorServiceRecorded. The pool must pass
+        pNavigation.isPseudoRecording (=4) as the type argument.
+        """
+        from enigma import pNavigation
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1, Role.PREV: 0, Role.HISTORY: 0})
+        # default came in from config init; assert it explicitly
+        self.assertEqual(_cfg.pretune_indicator_style.value, "pseudo")
+        pool.arm({Role.NEXT: [FakeRef("1:0:1:A:0:0:0:0:0:0:A")]})
+        self.assertEqual(len(nav.record_args), 1)
+        ref, simulate, type_flag = nav.record_args[0]
+        self.assertFalse(simulate)
+        self.assertEqual(type_flag, pNavigation.isPseudoRecording)
+
+    def test_indicator_style_hidden_passes_fastzap_record_type(self):
+        from enigma import pNavigation
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1, Role.PREV: 0, Role.HISTORY: 0})
+        _cfg.pretune_indicator_style.value = "hidden"
+        try:
+            pool.arm({Role.NEXT: [FakeRef("1:0:1:A:0:0:0:0:0:0:A")]})
+            _, _, type_flag = nav.record_args[0]
+            self.assertEqual(type_flag, pNavigation.isFromSpecialJumpFastZap)
+        finally:
+            _cfg.pretune_indicator_style.value = "pseudo"
+
+    def test_indicator_style_recorded_passes_unknown_record_type(self):
+        """The 'recorded' choice restores the pre-v0.6.0 behaviour by
+        passing isUnknownRecording (=8), which the painter sees as a
+        real recording and paints red.
+        """
+        from enigma import pNavigation
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1, Role.PREV: 0, Role.HISTORY: 0})
+        _cfg.pretune_indicator_style.value = "recorded"
+        try:
+            pool.arm({Role.NEXT: [FakeRef("1:0:1:A:0:0:0:0:0:0:A")]})
+            _, _, type_flag = nav.record_args[0]
+            self.assertEqual(type_flag, pNavigation.isUnknownRecording)
+        finally:
+            _cfg.pretune_indicator_style.value = "pseudo"
+
+    def test_indicator_type_falls_back_when_constant_missing(self):
+        """If the user-saved value points to a pNavigation constant
+        that the running enigma2 build does not expose (rare - only on
+        a build downgrade after the value was saved), _indicator_type()
+        must fall back to isUnknownRecording rather than throw or pass
+        a meaningless flag.
+        """
+        from enigma import pNavigation
+        from FBCChannelSpeedChange.fbc_pretune_pool import _indicator_type
+        saved_fastzap = pNavigation.isFromSpecialJumpFastZap
+        _cfg.pretune_indicator_style.value = "hidden"
+        try:
+            del pNavigation.isFromSpecialJumpFastZap
+            self.assertEqual(_indicator_type(), pNavigation.isUnknownRecording,
+                             "missing constant -> fall back to unknown (red)")
+        finally:
+            pNavigation.isFromSpecialJumpFastZap = saved_fastzap
+            _cfg.pretune_indicator_style.value = "pseudo"
+
+    def test_indicator_choices_filtered_when_fastzap_missing(self):
+        """The ConfigSelection helper hides 'hidden' from the dropdown
+        if pNavigation does not expose isFromSpecialJumpFastZap, so the
+        user never picks a value that would silently fall back.
+        """
+        from enigma import pNavigation
+        from FBCChannelSpeedChange.config import _indicator_choices_and_default
+        saved = pNavigation.isFromSpecialJumpFastZap
+        try:
+            del pNavigation.isFromSpecialJumpFastZap
+            choices, default = _indicator_choices_and_default()
+            keys = [k for k, _label in choices]
+            self.assertNotIn("hidden", keys)
+            self.assertIn("pseudo", keys)
+            self.assertIn("recorded", keys)
+            self.assertEqual(default, "pseudo")
+        finally:
+            pNavigation.isFromSpecialJumpFastZap = saved
+
+    def test_indicator_choices_default_recorded_when_pseudo_missing(self):
+        """Extreme degradation: neither pseudo nor fastzap available.
+        Only 'recorded' remains and becomes the forced default.
+        """
+        from enigma import pNavigation
+        from FBCChannelSpeedChange.config import _indicator_choices_and_default
+        saved_pseudo = pNavigation.isPseudoRecording
+        saved_fastzap = pNavigation.isFromSpecialJumpFastZap
+        try:
+            del pNavigation.isPseudoRecording
+            del pNavigation.isFromSpecialJumpFastZap
+            choices, default = _indicator_choices_and_default()
+            self.assertEqual(choices, [("recorded", "Red (treated as recording)")])
+            self.assertEqual(default, "recorded")
+        finally:
+            pNavigation.isPseudoRecording = saved_pseudo
+            pNavigation.isFromSpecialJumpFastZap = saved_fastzap
+
     def test_release_stops_started_recordable(self):
         pool, nav, _ = make_pool()
         pool.configure({Role.NEXT: 1, Role.PREV: 0, Role.HISTORY: 0})
@@ -400,7 +509,7 @@ class PoolTests(unittest.TestCase):
     def test_recordService_returning_none_leaves_slot_idle(self):
         nim = FakeNimManager([FakeNim(is_fbc=True)])
         class StingyNav(FakeNav):
-            def recordService(self, ref):
+            def recordService(self, ref, simulate=False, type=None):
                 return None
         nav = StingyNav()
         pool = FBCPreTunePool(
