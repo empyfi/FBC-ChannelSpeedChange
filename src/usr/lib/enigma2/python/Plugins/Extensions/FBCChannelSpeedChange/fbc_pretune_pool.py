@@ -32,6 +32,15 @@ from .predictor import _key as _ref_key, _tp_key
 
 _DUMPED_RECORDABLE_API = False
 
+# Pre-import the InfoBar class at module load time so the per-call
+# refresh helper does not pay the import-machinery cost on every slot
+# arm/release. In tests the import fails (no Screens module is
+# stubbed) and _InfoBar stays None - the helper short-circuits.
+try:
+    from Screens.InfoBar import InfoBar as _InfoBar
+except Exception:
+    _InfoBar = None
+
 
 def _indicator_type():
     """Resolve cfg.pretune_indicator_style to the pNavigation enum.
@@ -354,6 +363,10 @@ class FBCPreTunePool:
                 self._kick_real_tune(slot, rec)
 
             self._schedule_optimistic_lock(slot)
+            # Force the open channel list to repaint the row for this
+            # ref so the new pseudo-recording colour shows immediately
+            # rather than only when the bouquet list is re-opened.
+            _refresh_channellist(target_ref)
         except Exception as exc:
             error("recordService raised: %r" % exc)
             slot.recordable = None
@@ -587,6 +600,9 @@ class FBCPreTunePool:
         """
         if slot is None:
             return
+        # Capture the ref before stage 4 zeroes it so we can refresh
+        # the channel-list row after the recordable is gone.
+        released_ref = slot.service_ref
         # Stage 1: stop the tmpfs reclaim timer first; it might fire
         # mid-cleanup and try to punch a hole in a file about to be
         # deleted.
@@ -633,6 +649,11 @@ class FBCPreTunePool:
             slot.state = SlotState.IDLE if keep_object else SlotState.RELEASED
         except Exception as exc:
             error("release_slot state reset: %r" % exc)
+        # Stage 5: force the open channel list to repaint the row for
+        # the just-released ref so the pseudo-recording colour clears
+        # immediately rather than lingering until the bouquet is
+        # re-opened.
+        _refresh_channellist(released_ref)
 
     def _dump_recordable_api_once(self, rec):
         global _DUMPED_RECORDABLE_API
@@ -663,6 +684,61 @@ class FBCPreTunePool:
 
 _PRETUNE_TMP_PREFIX = "fbc_csc_pretune_"
 _PRETUNE_TMP_SIDECARS = (".ap", ".sc", ".cuts", ".meta", ".eit")
+
+
+def _refresh_channellist(ref=None):
+    """Force the live channel-list listbox to mark its visible region
+    dirty so the C++ painter re-queries getRecordings() at the next
+    paint event. Best-effort - silently no-ops when running off-box
+    or when the channel-list widget hasn't been built yet.
+
+    Background: pretune slots use NavigationInstance.recordService
+    directly, bypassing RecordTimer. The C++ painter
+    (eListboxServiceContent::paint) decides each row's recording
+    indicator colour by querying eNavigation::getRecordings() at
+    paint time - but the listbox engine only paints rows it has
+    marked dirty (cursor moved over them, full redraw, etc.). With
+    no RecordTimer event firing on our slot arm/release, no row
+    gets marked dirty when our recording-set changes; rows keep the
+    colour from their last paint until the user re-opens the
+    bouquet.
+
+    We must use the full-list invalidate() rather than the
+    per-entry redrawItemByIndex(idx) path because the openatv
+    lookupService(ref) C++ implementation is broken: only the
+    "ref == cursor" shortcut returns the correct index; the
+    fall-through for-loop has an empty body and always returns
+    m_list.size() as a sentinel for "not found". On a slot
+    release the cursor has typically already moved to the next
+    hover target, so the just-released ref is not at the cursor
+    and lookupService returns a phantom index past the list end,
+    silently producing no repaint.
+
+    invalidate() with no region argument marks the entire visible
+    region dirty. It does NOT touch the cursor position, so the
+    user does not see any cursor jump. Costs one repaint of the
+    visible rows (typically ~10-20 entries on the channel list);
+    cheap.
+
+    The ``ref`` argument is currently unused but kept in the
+    signature so future versions can switch back to a targeted
+    path if upstream lookupService gets fixed.
+    """
+    if _InfoBar is None:
+        return
+    try:
+        ibi = _InfoBar.instance
+        if ibi is None:
+            return
+        cs = getattr(ibi, "servicelist", None)
+        sl = getattr(cs, "servicelist", None) if cs else None
+        elb = getattr(sl, "instance", None) if sl else None
+        if elb is None:
+            return
+        elb.invalidate()
+    except Exception:
+        # UI refresh is cosmetic - never let it raise into the pool.
+        pass
 
 
 def _unlink_pretune_file(tmp_path):

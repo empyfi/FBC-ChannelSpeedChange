@@ -16,7 +16,7 @@ stay in sync with `CONTROL/control` and `Makefile` on every release;
 import os
 
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 
 def _(txt):

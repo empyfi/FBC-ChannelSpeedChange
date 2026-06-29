@@ -3,6 +3,44 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.1] - 2026-06-29
+
+### Fixed
+- Channel-list indicator no longer goes stale during cursor
+  navigation. Before v0.6.1, when an external pretune source
+  (FCC-Extender hover, NumberZap typing) rotated through pretune
+  refs in tight succession, each visited service kept its pretune
+  indicator colour (blue with the v0.6.0 default, or red on the
+  pre-v0.6.0 baseline) until the user re-opened the bouquet.
+  Root cause: the pool calls `NavigationInstance.recordService`
+  directly, bypassing RecordTimer, so no event fires to invalidate
+  the channel-list listbox when a slot is armed or released. The
+  C++ painter (`eListboxServiceContent`) would paint the recording
+  colour on the next paint, but the listbox engine never marked
+  the affected rows dirty.
+
+  The pool now calls `eListbox.invalidate()` on the live
+  ChannelSelection widget after each slot arm and release, which
+  marks the visible region dirty without changing the cursor.
+  Implementation note: `eListboxServiceContent.lookupService(ref)`
+  is unreliable upstream — only the shortcut for `ref == cursor`
+  returns a correct index; the fall-through for-loop has an empty
+  body and returns `m_list.size()` as a sentinel — so a targeted
+  `redrawItemByIndex(idx)` would fire on a phantom past-the-end
+  index. Full `invalidate()` works around this without depending
+  on the broken upstream helper.
+
+  Pre-existing bug since v0.3.x — verified to reproduce on v0.5.3
+  with the red highlight too. v0.6.0's blue default just made it
+  more noticeable.
+
+  Touches only `fbc_pretune_pool.py` (+76 LOC: helper +
+  arm/release call sites). No config changes, no new C-binding
+  surface — `eListbox.invalidate()` is exposed by enigma2's
+  standard GUI SWIG layer. Cosmetic refresh is best-effort and
+  silently no-ops when running off-box or when the channel-list
+  widget has not been built yet.
+
 ## [0.6.0] - 2026-06-25
 
 ### Added
