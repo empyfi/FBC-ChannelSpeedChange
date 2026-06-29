@@ -237,7 +237,7 @@ class ExternalApiTests(unittest.TestCase):
     def test_caller_frame_logged_when_debug_log_on(self):
         """With cfg.debug_log on, the api logs the caller's
         filename:line so a forum reporter can answer "which plugin
-        called us" when something goes wrong.
+        made the call" when something goes wrong.
         """
         _cfg.debug_log.value = True
         captured = []

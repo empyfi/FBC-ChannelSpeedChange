@@ -399,7 +399,7 @@ class Controller:
                 return
             # Refresh the TTL on every call, even on drop / idempotent
             # paths - the caller still wants the slot to stay alive
-            # even if we are short-circuiting the arm.
+            # even on the short-circuit arm path.
             self._refresh_external_ttl()
             try:
                 key = _ref_key(ref)
@@ -439,7 +439,8 @@ class Controller:
         except Exception as exc:
             # External-caller induced failures do NOT increment the
             # watchdog counter - those are someone else's bugs and
-            # must not let a misbehaving companion plugin kill us.
+            # must not let a misbehaving companion plugin take down
+            # the controller.
             # Always include the full traceback - errors are rare
             # enough that log volume is not a concern, and the
             # traceback is what a forum reporter needs to attribute

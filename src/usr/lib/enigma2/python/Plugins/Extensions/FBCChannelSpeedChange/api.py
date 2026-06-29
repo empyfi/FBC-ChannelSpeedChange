@@ -181,7 +181,7 @@ def _log_caller(entry_point, service_ref):
     caller's filename and line. Gated on ``cfg.debug_log`` because
     ``inspect.stack`` is expensive enough to want to keep out of
     the hot path on normal runs; the line lets a forum reporter
-    answer "which plugin called us" once the debug toggle is on.
+    answer "which plugin made the call" once the debug toggle is on.
     """
     try:
         if not cfg.debug_log.value:

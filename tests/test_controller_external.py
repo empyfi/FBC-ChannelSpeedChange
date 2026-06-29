@@ -297,8 +297,8 @@ class ExternalSlotLifecycleTests(unittest.TestCase):
         timer = c._external_ttl_timer
         # Simulate the timer running for a while (not actually firing).
         c.pretune_external(ref)
-        # Same timer object, restarted. We can detect the restart by
-        # the _running flag and that no expiry callback fired.
+        # Same timer object, restarted. The restart is detectable via
+        # the _running flag and the absence of an expiry callback.
         self.assertIs(c._external_ttl_timer, timer)
         self.assertTrue(c._external_ttl_timer._running)
 

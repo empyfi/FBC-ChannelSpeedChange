@@ -224,8 +224,8 @@ try:
             # prompt path: it calls saveAll() (which returns an empty
             # tuple on a normal save, or a (QUIT_RESTART, ...) /
             # (QUIT_REBOOT, ...) tuple when an item carries the
-            # restart="gui" / restart="system" attribute). Our
-            # setup.xml uses neither marker, so saveAll() always
+            # restart="gui" / restart="system" attribute). The
+            # plugin's setup.xml uses neither marker, so saveAll() always
             # returns () here, and Setup.keySave() falls through to
             # self.close(). Delegating keeps that behaviour intact
             # while still firing the controller hook.

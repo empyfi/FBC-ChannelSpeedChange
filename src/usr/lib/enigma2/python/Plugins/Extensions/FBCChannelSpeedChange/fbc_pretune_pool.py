@@ -600,8 +600,8 @@ class FBCPreTunePool:
         """
         if slot is None:
             return
-        # Capture the ref before stage 4 zeroes it so we can refresh
-        # the channel-list row after the recordable is gone.
+        # Capture the ref before stage 4 zeroes it so the channel-list
+        # row can be refreshed after the recordable is gone.
         released_ref = slot.service_ref
         # Stage 1: stop the tmpfs reclaim timer first; it might fire
         # mid-cleanup and try to punch a hole in a file about to be
@@ -698,12 +698,12 @@ def _refresh_channellist(ref=None):
     indicator colour by querying eNavigation::getRecordings() at
     paint time - but the listbox engine only paints rows it has
     marked dirty (cursor moved over them, full redraw, etc.). With
-    no RecordTimer event firing on our slot arm/release, no row
-    gets marked dirty when our recording-set changes; rows keep the
-    colour from their last paint until the user re-opens the
+    no RecordTimer event firing on slot arm/release, no row gets
+    marked dirty when the pool's recording-set changes; rows keep
+    the colour from their last paint until the user re-opens the
     bouquet.
 
-    We must use the full-list invalidate() rather than the
+    The full-list invalidate() is required rather than the
     per-entry redrawItemByIndex(idx) path because the openatv
     lookupService(ref) C++ implementation is broken: only the
     "ref == cursor" shortcut returns the correct index; the
