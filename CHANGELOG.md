@@ -3,6 +3,38 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.2] - 2026-07-01
+
+### Fixed
+- Public API string-form input now accepts the full canonical
+  `eServiceReference.toString()` shape including the trailing
+  `::<display name>` suffix. Before v0.6.2, callers that read the
+  channel-list cursor via `getCurrentSelection().toString()` and
+  passed the raw string to `PreTuneSingleChannel` /
+  `ReleaseSingleChannel` had their calls silently rejected by the
+  input whitelist because the display-name characters (`Z`, `D`,
+  `F` in `ZDF` etc.) fall outside the hex character class the old
+  regex required for every position after the initial `1:0:`.
+  Companion plugins had to strip the suffix before every call to
+  work around this.
+
+  New regex accepts the ten hex fields followed by the optional
+  standard `:` or `::<name>` tail. Non-empty path fields
+  (`:file.ts:name`, `:/etc/shadow:name`) remain rejected — those
+  never appear on a DVB broadcast ref and are the shape a
+  path-injection attempt would take. The 512-byte length cap still
+  applies to the whole string.
+
+  When `Debug-Log` is on, a rejected string ref now emits a debug
+  line naming the reason (shape mismatch or oversize). Silent
+  rejection is preserved on the normal info-level surface so
+  malicious spam callers cannot fill the log.
+
+### Changed
+- No config surface, no C-binding surface, no behavioural change
+  for callers already passing `eServiceReference` objects or
+  suffix-free strings. Purely a widened input contract.
+
 ## [0.6.1] - 2026-06-29
 
 ### Fixed

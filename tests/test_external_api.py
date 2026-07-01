@@ -197,6 +197,28 @@ class ExternalApiTests(unittest.TestCase):
         self.assertEqual(forwarded.toString(),
                          "1:0:1:6DCA:44D:1:C00000:0:0:0:")
 
+    def test_pretune_accepts_string_ref_with_name_suffix(self):
+        # The full canonical toString shape carries an optional
+        # `::<name>` display suffix; eServiceReference.toString() on
+        # a live cursor returns this form. Callers that read the
+        # cursor via getCurrentSelection().toString() must be able
+        # to pass the raw string without stripping the suffix.
+        for s in ("1:0:19:283D:3FB:1:C00000:0:0:0::Das Erste",
+                  "1:0:19:2B66:3F3:1:C00000:0:0:0::ZDF",
+                  "1:0:1:445D:453:1:C00000:0:0:0::ProSieben",
+                  "1:0:19:283D:3FB:1:C00000:0:0:0::"):
+            self.fake.pretune_calls = []
+            api.PreTuneSingleChannel(s)
+            self.assertEqual(len(self.fake.pretune_calls), 1,
+                             "string ref with name suffix must reach "
+                             "the controller: %s" % s)
+        # Length must still be respected on the name-suffix path.
+        self.fake.pretune_calls = []
+        api.PreTuneSingleChannel(
+            "1:0:1:6DCA:44D:1:C00000:0:0:0::" + "X" * 600)
+        self.assertEqual(self.fake.pretune_calls, [],
+                         "oversize name suffix must be rejected")
+
     def test_release_accepts_valid_string_ref(self):
         api.ReleaseSingleChannel("1:0:1:6DCA:44D:1:C00000:0:0:0:")
         self.assertEqual(len(self.fake.release_calls), 1)
@@ -218,8 +240,9 @@ class ExternalApiTests(unittest.TestCase):
             "2:0:1:A:B:C:D:0:0:0:",                       # marker type
             "1:0:1:A:B:C:",                               # too few fields
             "1:0:Z:A:B:C:D:0:0:0:",                       # non-hex stype
-            "1:0:1:A:B:C:D:0:0:0:/etc/shadow:name",       # path injection
-            "1:0:1:A:B:C:D:0:0:0:" + "X" * 600,           # oversize
+            "1:0:1:A:B:C:D:0:0:0:/etc/shadow:name",       # path injection (non-empty path)
+            "1:0:1:A:B:C:D:0:0:0:file.ts:name",           # file-backed ref
+            "1:0:1:A:B:C:D:0:0:0::" + "X" * 600,          # oversize name suffix
         ]
         for s in rejected:
             api.PreTuneSingleChannel(s)

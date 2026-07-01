@@ -45,14 +45,19 @@ from .config import cfg
 
 
 # Whitelist for the canonical DVB broadcast serviceref shape, e.g.
-# "1:0:1:6DCA:44D:1:C00000:0:0:0:" (HD+ Disney Channel HD). Format:
-# <type>:<flags>:<stype>:<sid>:<tsid>:<onid>:<ns>:<parent_sid>:<parent_tsid>:<unused>:[<path>:[<name>]]
-# Only "1:0:" (DVB broadcast service) is accepted. Bouquets ("1:7:"),
-# IPTV ("4097:"), markers, file-backed playback refs and refs carrying a
-# non-hex trailing path are rejected before any SWIG constructor sees
-# them, so a malformed caller string cannot reach the C++ parser.
+# "1:0:1:6DCA:44D:1:C00000:0:0:0:" (HD+ Disney Channel HD) or
+# "1:0:19:283D:3FB:1:C00000:0:0:0::Das Erste" (with trailing name).
+# Format:
+# <type>:<flags>:<stype>:<sid>:<tsid>:<onid>:<ns>:<parent_sid>:<parent_tsid>:<unused>[:<path>[:<name>]]
+# The 10 leading fields must be hex; the optional trailing `:path:name`
+# is allowed but `path` must be empty (only `::name` shape). A non-empty
+# path field is rejected to keep file-backed playback refs and path-
+# injection attempts out of the SWIG constructor. `name` is display-
+# only and may contain any character. Only "1:0:" (DVB broadcast
+# service) is accepted; bouquets ("1:7:"), IPTV ("4097:") and markers
+# are rejected.
 _SREF_SHAPE = re.compile(
-    r"^1:0:[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F:]*$"
+    r"^1:0:[0-9a-fA-F]+(:[0-9a-fA-F]+){7}(:(:.*)?)?$"
 )
 _SREF_MAX_LEN = 512
 
@@ -166,8 +171,18 @@ def _coerce_to_serviceref(obj):
     if not isinstance(obj, str):
         return None
     if len(obj) > _SREF_MAX_LEN:
+        try:
+            if cfg.debug_log.value:
+                debug("api: string ref rejected (over %d bytes)" % _SREF_MAX_LEN)
+        except Exception:
+            pass
         return None
     if not _SREF_SHAPE.match(obj):
+        try:
+            if cfg.debug_log.value:
+                debug("api: string ref rejected (shape mismatch): %r" % obj)
+        except Exception:
+            pass
         return None
     try:
         from enigma import eServiceReference

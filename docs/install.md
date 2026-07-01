@@ -37,7 +37,7 @@ The receiver needs internet access; everything else happens via SSH.
 ssh root@<your-box-ip>
 
 # 1. Grab the latest IPK from GitHub
-wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.6.1/enigma2-plugin-extensions-fbc-channelspeedchange_0.6.1_all.ipk -O /tmp/fbc.ipk
+wget https://github.com/empyfi/FBC-ChannelSpeedChange/releases/download/v0.6.2/enigma2-plugin-extensions-fbc-channelspeedchange_0.6.2_all.ipk -O /tmp/fbc.ipk
 
 # 2. Install
 opkg install /tmp/fbc.ipk
