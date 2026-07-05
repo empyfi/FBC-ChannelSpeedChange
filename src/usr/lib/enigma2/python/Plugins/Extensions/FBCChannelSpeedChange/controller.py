@@ -139,6 +139,32 @@ class _ExternalStats:
         )
 
 
+def sanity_check_standby_hook():
+    """Inspect the standby-transition surface the pool release relies on.
+
+    Returns (critical, optional). Missing hooks are always optional:
+    without them the pretune slots stay armed across a standby cycle
+    which is the pre-v0.6.3 behaviour - degraded rather than broken.
+    The main reason to expose it at all is to surface the degradation
+    on non-mainstream builds so a forum reporter knows why standby
+    still keeps the frontends busy.
+
+    openatv (and every other enigma2 fork inspected) does NOT expose
+    ``onEnterStandby`` / ``onLeaveStandby`` on the Session object. The
+    canonical detection path is the ``Screens.Standby.Standby`` class:
+    an instance is created when the box enters standby, and closed on
+    resume. Every fork keeps this contract for legacy plugin
+    compatibility, so patching the base class covers Standby, Standby2
+    (subclass on openatv) and every downstream variant in one shot.
+    """
+    optional = []
+    try:
+        from Screens.Standby import Standby  # noqa: F401
+    except Exception as exc:
+        optional.append("Screens.Standby.Standby import: %r" % exc)
+    return [], optional
+
+
 def sanity_check_external_hook():
     """Inspect the evNewProgramInfo subscription surface the v0.5.0
     EXTERNAL slot lifecycle relies on.
@@ -219,6 +245,16 @@ class Controller:
         self._external_stats = _ExternalStats()
         self._external_stats_timer = None
 
+        # v0.6.3 standby handling. When True, the re-arm cycle and the
+        # external-api arm path both short-circuit to no-op so no new
+        # pretune allocation happens while the box is in standby. Live
+        # slots are released on the enter-standby edge; the leave edge
+        # schedules a fresh re-arm. Dispatch runs through module-level
+        # helpers that resolve Controller.peek() so the class-level
+        # Standby patch (installed once per process) stays independent
+        # of the controller lifecycle.
+        self._in_standby = False
+
         Controller._instance = self
 
     # --- lifecycle ------------------------------------------------------
@@ -244,15 +280,17 @@ class Controller:
             pool_crit, pool_opt = self._pool.sanity_check()
             arb_crit, arb_opt = self._arbiter.sanity_check()
             ext_crit, ext_opt = sanity_check_external_hook()
-            for w in pool_opt + arb_opt + ext_opt:
+            sb_crit, sb_opt = sanity_check_standby_hook()
+            for w in pool_opt + arb_opt + ext_opt + sb_opt:
                 warn("sanity (degraded): %s" % w)
-            if pool_crit + arb_crit + ext_crit:
-                self._sanity_refuse(pool_crit + arb_crit + ext_crit)
+            if pool_crit + arb_crit + ext_crit + sb_crit:
+                self._sanity_refuse(pool_crit + arb_crit + ext_crit + sb_crit)
                 return
 
             self._apply_pool_capacity()
             self._arbiter.start()
             self._wire_evnewproginfo()
+            self._wire_standby_hooks()
             self._start_external_stats_heartbeat()
             infobar = self._find_infobar()
             if infobar is None:
@@ -287,6 +325,7 @@ class Controller:
             self._stop_external_ttl()
             self._stop_external_stats_heartbeat()
             self._unwire_evnewproginfo()
+            self._unwire_standby_hooks()
             self._interceptor.stop()
             self._arbiter.stop()
             self._pool.shutdown()
@@ -352,6 +391,8 @@ class Controller:
         try:
             if not self._enabled:
                 return
+            if self._in_standby:
+                return
             next_refs = self._predictor.next_service(count=1) if cfg.pretune_next.value else []
             prev_refs = self._predictor.prev_service(count=1) if cfg.pretune_prev.value else []
             # History uses count=1 so only the immediately previous
@@ -396,6 +437,9 @@ class Controller:
         """
         try:
             if not self._enabled:
+                return
+            if self._in_standby:
+                debug("pretune_external: box in standby, dropping")
                 return
             # Refresh the TTL on every call, even on drop / idempotent
             # paths - the caller still wants the slot to stay alive
@@ -579,6 +623,96 @@ class Controller:
         except Exception as exc:
             error("_on_nav_event: %r" % exc)
 
+    # --- standby handling (v0.6.3) -------------------------------------
+
+    def _wire_standby_hooks(self):
+        """Install a monkey-patch on ``Screens.Standby.Standby.__init__``
+        so every standby-screen instantiation notifies the controller.
+
+        openatv (and inspected forks) do not expose an ``onEnterStandby``
+        signal on the Session object; the canonical detection surface
+        is the standby Screen instance itself. Patching the base class
+        covers both ``Standby`` (called when the user is in the menu at
+        standby time) and ``Standby2`` (subclass, called when TV is
+        live at standby time), because both funnel through the same
+        ``__init__``. Downstream forks that add their own subclasses
+        pick up the hook the same way.
+
+        The patch is intentionally idempotent (marker attribute on the
+        class) so a Controller restart or a spurious re-wire does not
+        stack multiple wrappers. Dispatch goes through
+        ``Controller.peek()`` so an inactive plugin cleanly no-ops.
+        """
+        try:
+            from Screens.Standby import Standby as _Standby
+        except Exception as exc:
+            warn("_wire_standby_hooks: Standby class unavailable (%r)" % exc)
+            return
+        if getattr(_Standby, "_fbc_csc_wrapped", False):
+            debug("_wire_standby_hooks: Standby.__init__ already wrapped")
+            return
+        _orig_init = _Standby.__init__
+
+        def _wrapped_init(self, session, *args, **kwargs):
+            _orig_init(self, session, *args, **kwargs)
+            try:
+                # Screen.__init__ populates self.onClose - safe to
+                # append here without a hasattr check because we are
+                # running after the base init.
+                self.onClose.append(_standby_leave_dispatch)
+                _standby_enter_dispatch()
+            except Exception as exc:
+                # Never let a plugin bug take down the standby screen.
+                error("standby wrapper failed: %r" % exc)
+
+        _Standby.__init__ = _wrapped_init
+        _Standby._fbc_csc_wrapped = True
+        debug("_wire_standby_hooks: Standby.__init__ wrapped")
+
+    def _unwire_standby_hooks(self):
+        """No-op by design.
+
+        The Standby class-level patch is idempotent and dispatches via
+        ``Controller.peek()``, so an inactive controller already sees
+        the dispatcher return early. Trying to restore the original
+        ``__init__`` would race against any other plugin that patched
+        Standby after us and revert their patch too. Leaving the
+        wrapper installed for the process lifetime is the safer
+        contract.
+        """
+        return
+
+    def _on_enter_standby(self):
+        """Release every pool slot and block further arming.
+
+        Live viewing is stopped by enigma2 itself on standby entry; the
+        pool's pretune slots are the only remaining tuner consumers
+        this plugin owns. Freeing them lets the FBC frontends idle so
+        the box can reach a proper standby state (relevant on shared
+        Unicable installations where a second receiver needs the SCR
+        bands, and for users who keep the box permanently in standby).
+        """
+        try:
+            info("entering standby: releasing pool")
+            self._in_standby = True
+            if self._rearm_timer is not None:
+                try:
+                    self._rearm_timer.stop()
+                except Exception:
+                    pass
+            self._pool.release_for("standby")
+            self._stop_external_ttl()
+        except Exception as exc:
+            error("_on_enter_standby: %r" % exc)
+
+    def _on_leave_standby(self):
+        try:
+            info("leaving standby: scheduling re-arm")
+            self._in_standby = False
+            self._schedule_rearm(delay_ms=500)
+        except Exception as exc:
+            error("_on_leave_standby: %r" % exc)
+
     # --- external stats heartbeat (60s, info-level) --------------------
 
     def _start_external_stats_heartbeat(self):
@@ -731,7 +865,34 @@ class Controller:
             error("_defer_interceptor_start: %r" % exc)
 
 
-# --- helpers ------------------------------------------------------------
+# --- module-level helpers ----------------------------------------------
+
+def _standby_enter_dispatch():
+    """Class-level Standby wrapper landing pad for enter events.
+
+    Runs at Standby-screen instantiation time. Resolves the live
+    controller through ``Controller.peek()`` so an uninstalled or
+    stopped plugin cleanly no-ops without ever touching the standby
+    path.
+    """
+    c = Controller.peek()
+    if c is None or not c._enabled:
+        return
+    c._on_enter_standby()
+
+
+def _standby_leave_dispatch():
+    """Class-level Standby wrapper landing pad for close events.
+
+    Registered on the Standby screen's ``onClose`` list, so it fires
+    when the box wakes up. Same peek-and-drop pattern as the enter
+    dispatcher.
+    """
+    c = Controller.peek()
+    if c is None or not c._enabled:
+        return
+    c._on_leave_standby()
+
 
 def _collapse_history_on_convergence(next_refs, prev_refs, hist_refs):
     """During linear bouquet walking the HISTORY target (the

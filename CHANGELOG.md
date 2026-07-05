@@ -3,6 +3,39 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.3] - 2026-07-05
+
+### Fixed
+- Pre-tune slots are released the moment the box enters standby and
+  arming stays blocked until standby ends. Before v0.6.3 the pool
+  kept its slots armed across the transition, so the FBC frontends
+  stayed busy and the box could not reach a proper standby state.
+  Two visible consequences went away with this release:
+
+  - On shared Unicable installations where a second receiver reuses
+    the same SCR bands while the first box is in standby, the bands
+    the pool held on to were no longer available. Reported by a
+    forum user running two boxes on one Unicable feed.
+  - For users who keep the box permanently in standby the LNB
+    stayed powered and the frontends kept a tuning lock for no
+    playback reason, with a small but real idle power cost.
+
+  On the leave-standby edge the controller schedules a fresh re-arm
+  so the next zap after wake-up hits a warm pretune slot as usual.
+  The public API (`PreTuneSingleChannel`) also short-circuits to a
+  no-op while the box is in standby; the caller stays free to fire
+  and forget without holding state.
+
+  Implementation uses `session.onEnterStandby` /
+  `session.onLeaveStandby` — standard enigma2 hooks. On a build
+  that does not expose either attribute, the plugin falls back to
+  pre-v0.6.3 behaviour with a `sanity (degraded)` warn line so the
+  degradation is visible in the log.
+
+### Changed
+- No config surface, no C-binding surface. 18 new tests
+  (`tests/test_standby.py`), 163 → 181 green.
+
 ## [0.6.2] - 2026-07-01
 
 ### Fixed
