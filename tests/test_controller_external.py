@@ -35,6 +35,10 @@ bootstrap()
 class FakeRef:
     def __init__(self, s):
         self._s = s
+        try:
+            self.type = int(s.split(":", 1)[0])
+        except (ValueError, IndexError):
+            self.type = 1
 
     def toString(self):
         return self._s

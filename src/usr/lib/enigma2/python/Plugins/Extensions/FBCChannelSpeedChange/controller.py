@@ -139,6 +139,40 @@ class _ExternalStats:
         )
 
 
+def sanity_check_scan_hook():
+    """Inspect the service-scan-screen surface the pool release relies on.
+
+    Returns (critical, optional). Missing hooks are always optional:
+    without them the pretune slots stay armed while a service scan
+    runs which is the pre-v0.6.4 behaviour - the scan then fails with
+    "Fehler beim Start der Suche" if the pool happens to hold the
+    tuner the scan dialog requested. Degraded rather than broken;
+    the operator sees the sanity warn line to explain why the fix
+    is not active on this build.
+
+    Two module paths are checked because openatv layers scan UI over
+    three classes: ``Screens.ScanSetup.ScanSetup`` (advanced dialog),
+    ``Screens.ScanSetup.ScanSimple`` (simple-scan wizard), and
+    ``Screens.ServiceScan.ServiceScan`` (the actual scan runner).
+    Any single missing class only degrades that scan path; only when
+    all three are missing does the fix become inactive entirely.
+    """
+    optional = []
+    try:
+        from Screens.ScanSetup import ScanSetup  # noqa: F401
+    except Exception as exc:
+        optional.append("Screens.ScanSetup.ScanSetup import: %r" % exc)
+    try:
+        from Screens.ScanSetup import ScanSimple  # noqa: F401
+    except Exception as exc:
+        optional.append("Screens.ScanSetup.ScanSimple import: %r" % exc)
+    try:
+        from Screens.ServiceScan import ServiceScan  # noqa: F401
+    except Exception as exc:
+        optional.append("Screens.ServiceScan.ServiceScan import: %r" % exc)
+    return [], optional
+
+
 def sanity_check_standby_hook():
     """Inspect the standby-transition surface the pool release relies on.
 
@@ -255,6 +289,18 @@ class Controller:
         # of the controller lifecycle.
         self._in_standby = False
 
+        # v0.6.4 service-scan handling. Same shape as standby - _do_rearm
+        # and pretune_external early-return while _in_scan is True. A
+        # counter (not a plain flag) covers the openatv screen stack:
+        # ScanSetup opens on top, its OK-press pushes ServiceScan over
+        # it, close of ServiceScan pops back into ScanSetup. Each open
+        # increments, each close decrements; the pool release fires on
+        # the 0->1 edge, the re-arm on the N->0 edge. This keeps the
+        # pool released across the whole scan session even when several
+        # scan-related screens overlap on the stack.
+        self._in_scan = False
+        self._scan_active_count = 0
+
         Controller._instance = self
 
     # --- lifecycle ------------------------------------------------------
@@ -281,16 +327,19 @@ class Controller:
             arb_crit, arb_opt = self._arbiter.sanity_check()
             ext_crit, ext_opt = sanity_check_external_hook()
             sb_crit, sb_opt = sanity_check_standby_hook()
-            for w in pool_opt + arb_opt + ext_opt + sb_opt:
+            sc_crit, sc_opt = sanity_check_scan_hook()
+            for w in pool_opt + arb_opt + ext_opt + sb_opt + sc_opt:
                 warn("sanity (degraded): %s" % w)
-            if pool_crit + arb_crit + ext_crit + sb_crit:
-                self._sanity_refuse(pool_crit + arb_crit + ext_crit + sb_crit)
+            if pool_crit + arb_crit + ext_crit + sb_crit + sc_crit:
+                self._sanity_refuse(
+                    pool_crit + arb_crit + ext_crit + sb_crit + sc_crit)
                 return
 
             self._apply_pool_capacity()
             self._arbiter.start()
             self._wire_evnewproginfo()
             self._wire_standby_hooks()
+            self._wire_scan_hooks()
             self._start_external_stats_heartbeat()
             infobar = self._find_infobar()
             if infobar is None:
@@ -326,6 +375,7 @@ class Controller:
             self._stop_external_stats_heartbeat()
             self._unwire_evnewproginfo()
             self._unwire_standby_hooks()
+            self._unwire_scan_hooks()
             self._interceptor.stop()
             self._arbiter.stop()
             self._pool.shutdown()
@@ -393,6 +443,8 @@ class Controller:
                 return
             if self._in_standby:
                 return
+            if self._in_scan:
+                return
             next_refs = self._predictor.next_service(count=1) if cfg.pretune_next.value else []
             prev_refs = self._predictor.prev_service(count=1) if cfg.pretune_prev.value else []
             # History uses count=1 so only the immediately previous
@@ -440,6 +492,9 @@ class Controller:
                 return
             if self._in_standby:
                 debug("pretune_external: box in standby, dropping")
+                return
+            if self._in_scan:
+                debug("pretune_external: service scan active, dropping")
                 return
             # Refresh the TTL on every call, even on drop / idempotent
             # paths - the caller still wants the slot to stay alive
@@ -713,6 +768,124 @@ class Controller:
         except Exception as exc:
             error("_on_leave_standby: %r" % exc)
 
+    # --- service-scan handling (v0.6.4) --------------------------------
+
+    # Class-patch markers - separate per screen so a single scan module
+    # missing on a fork does not block wrapping of the others.
+    _SCAN_WRAP_MARKER = "_fbc_csc_scan_wrapped"
+
+    _SCAN_SCREENS = (
+        ("Screens.ScanSetup", "ScanSetup"),
+        ("Screens.ScanSetup", "ScanSimple"),
+        ("Screens.ServiceScan", "ServiceScan"),
+    )
+
+    def _wire_scan_hooks(self):
+        """Install a monkey-patch on each service-scan screen so every
+        instantiation notifies the controller.
+
+        Three screens are patched: ``Screens.ScanSetup.ScanSetup``
+        (advanced dialog with tuner picker), ``ScanSimple`` (basic
+        wizard), and ``Screens.ServiceScan.ServiceScan`` (the actual
+        scan runner). openatv layers these over one another in a
+        stack - the advanced dialog opens, the user picks options and
+        hits OK, the ServiceScan pushes onto the stack. The wrapper
+        must release the pool on the FIRST scan screen opening (before
+        the user hits OK - by then the tuner allocation happens
+        synchronously and would fail with "Fehler beim Start der
+        Suche" if the pool still holds a frontend). A counter tracks
+        how many scan screens are open; re-arm fires only when the
+        stack is empty again.
+
+        Idempotent per screen via ``_fbc_csc_scan_wrapped``. Dispatch
+        goes through ``Controller.peek()`` so an inactive plugin
+        cleanly no-ops. Screens the running enigma2 build does not
+        expose are skipped silently - sanity_check_scan_hook surfaces
+        those as optional degradation.
+        """
+        for mod_name, cls_name in self._SCAN_SCREENS:
+            try:
+                mod = __import__(mod_name, fromlist=[cls_name])
+                cls = getattr(mod, cls_name)
+            except Exception as exc:
+                debug("_wire_scan_hooks: %s.%s unavailable (%r)"
+                      % (mod_name, cls_name, exc))
+                continue
+            if getattr(cls, self._SCAN_WRAP_MARKER, False):
+                debug("_wire_scan_hooks: %s already wrapped" % cls_name)
+                continue
+            self._wrap_scan_class(cls, cls_name)
+
+    def _wrap_scan_class(self, cls, cls_name):
+        _orig_init = cls.__init__
+
+        def _wrapped_init(self, *args, **kwargs):
+            _orig_init(self, *args, **kwargs)
+            try:
+                # Screen.__init__ populates self.onClose - safe to
+                # append here without a hasattr check because we are
+                # running after the base init.
+                self.onClose.append(_scan_leave_dispatch)
+                _scan_enter_dispatch()
+            except Exception as exc:
+                # Never let a plugin bug take down the scan screen.
+                error("scan wrapper failed: %r" % exc)
+
+        cls.__init__ = _wrapped_init
+        setattr(cls, self._SCAN_WRAP_MARKER, True)
+        debug("_wire_scan_hooks: %s.__init__ wrapped" % cls_name)
+
+    def _unwire_scan_hooks(self):
+        """No-op by design, same rationale as ``_unwire_standby_hooks``.
+
+        The class-level patches are idempotent and dispatch via
+        ``Controller.peek()``, so an inactive controller already sees
+        the dispatcher return early. Trying to restore the original
+        ``__init__`` would race against any other plugin that patched
+        the scan screens after us and revert their patch too. Leaving
+        the wrappers installed for the process lifetime is the safer
+        contract.
+        """
+        return
+
+    def _on_enter_scan(self):
+        """Fires on every scan-screen instantiation. Releases the pool
+        on the 0->1 count edge; subsequent overlapping scan screens
+        just bump the counter without re-releasing (pool.release_for
+        is idempotent on already-idle slots but the extra log line is
+        noise).
+        """
+        try:
+            self._scan_active_count += 1
+            if self._scan_active_count == 1:
+                info("entering service scan: releasing pool")
+                self._in_scan = True
+                if self._rearm_timer is not None:
+                    try:
+                        self._rearm_timer.stop()
+                    except Exception:
+                        pass
+                self._pool.release_for("scan")
+                self._stop_external_ttl()
+        except Exception as exc:
+            error("_on_enter_scan: %r" % exc)
+
+    def _on_leave_scan(self):
+        """Fires on every scan-screen close. Re-arm scheduled only when
+        the counter reaches zero - the openatv stack pattern typically
+        closes ServiceScan first while ScanSetup stays open below, and
+        we do not want to re-arm mid-scan-session.
+        """
+        try:
+            if self._scan_active_count > 0:
+                self._scan_active_count -= 1
+            if self._scan_active_count == 0:
+                info("leaving service scan: scheduling re-arm")
+                self._in_scan = False
+                self._schedule_rearm(delay_ms=500)
+        except Exception as exc:
+            error("_on_leave_scan: %r" % exc)
+
     # --- external stats heartbeat (60s, info-level) --------------------
 
     def _start_external_stats_heartbeat(self):
@@ -892,6 +1065,33 @@ def _standby_leave_dispatch():
     if c is None or not c._enabled:
         return
     c._on_leave_standby()
+
+
+def _scan_enter_dispatch():
+    """Class-level scan-screen wrapper landing pad for open events.
+
+    Runs at ScanSetup / ScanSimple / ServiceScan instantiation time.
+    Resolves the live controller through ``Controller.peek()`` so an
+    uninstalled or stopped plugin cleanly no-ops without ever touching
+    the scan path.
+    """
+    c = Controller.peek()
+    if c is None or not c._enabled:
+        return
+    c._on_enter_scan()
+
+
+def _scan_leave_dispatch():
+    """Class-level scan-screen wrapper landing pad for close events.
+
+    Registered on the scan screens' ``onClose`` list, so it fires when
+    the user backs out of the dialog or the scan runner exits. Same
+    peek-and-drop pattern as the enter dispatcher.
+    """
+    c = Controller.peek()
+    if c is None or not c._enabled:
+        return
+    c._on_leave_scan()
 
 
 def _collapse_history_on_convergence(next_refs, prev_refs, hist_refs):

@@ -37,6 +37,10 @@ from FBCChannelSpeedChange import api
 class FakeRef:
     def __init__(self, s):
         self._s = s
+        try:
+            self.type = int(s.split(":", 1)[0])
+        except (ValueError, IndexError):
+            self.type = 1
 
     def toString(self):
         return self._s
@@ -290,6 +294,41 @@ class ExternalApiTests(unittest.TestCase):
             any("called from" in m for m in captured),
             "caller-frame must stay out of the log when debug_log "
             "is off (avoid inspect.stack cost on hot path)")
+
+    # ---- v0.6.4 non-DVB reject ----
+
+    def test_pretune_rejects_iptv_object_ref(self):
+        # eServiceReference-shaped input with type != 1 (IPTV / stream
+        # / file). The object-form bypasses the string-shape whitelist,
+        # so the type check inside _coerce_to_serviceref is the only
+        # gate. Must never reach the controller.
+        iptv = FakeRef("4097:0:1:E:0:0:0:0:0:0:pluto")
+        api.PreTuneSingleChannel(iptv)
+        self.assertEqual(self.fake.pretune_calls, [],
+                         "IPTV ref must be rejected before controller")
+
+    def test_release_rejects_iptv_object_ref(self):
+        iptv = FakeRef("4097:0:1:E:0:0:0:0:0:0:pluto")
+        api.ReleaseSingleChannel(iptv)
+        self.assertEqual(self.fake.release_calls, [],
+                         "IPTV ref on Release must be rejected too")
+
+    def test_pretune_rejects_object_ref_without_type_attr(self):
+        # A malformed caller could hand in an object that quacks like
+        # eServiceReference (has toString) but lacks the type property.
+        # Safe fallback: reject rather than assume DVB.
+        class NoType:
+            def toString(self):
+                return "??"
+        api.PreTuneSingleChannel(NoType())
+        self.assertEqual(self.fake.pretune_calls, [])
+
+    def test_pretune_accepts_dvb_object_ref(self):
+        # Positive control: DVB ref (type 1) still reaches the
+        # controller, proving the reject is not over-broad.
+        dvb = FakeRef("1:0:19:283D:3FB:1:C00000:0:0:0:")
+        api.PreTuneSingleChannel(dvb)
+        self.assertEqual(self.fake.pretune_calls, [dvb])
 
 
 if __name__ == "__main__":

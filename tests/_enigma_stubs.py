@@ -101,10 +101,21 @@ def _build_enigma():
         """Minimal stand-in for the SWIG class - the api module's
         string-coerce path constructs one to hand off to the
         controller, tests assert on ``.toString()`` equality.
+
+        ``type`` mirrors the SWIG property; parsed from the first
+        colon-separated field of the ref string so ``"1:0:..."``
+        yields ``type=1`` (DVB) and ``"4097:0:..."`` yields
+        ``type=4097`` (IPTV / stream). Defaults to 1 for empty or
+        malformed strings so tests that pass an arbitrary label get
+        DVB semantics without extra setup.
         """
 
         def __init__(self, s=""):
             self._s = str(s)
+            try:
+                self.type = int(self._s.split(":", 1)[0])
+            except (ValueError, IndexError):
+                self.type = 1
 
         def toString(self):
             return self._s

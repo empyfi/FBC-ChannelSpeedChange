@@ -12,6 +12,10 @@ from FBCChannelSpeedChange.fbc_pretune_pool import FBCPreTunePool, Role, SlotSta
 class FakeRef:
     def __init__(self, s):
         self._s = s
+        try:
+            self.type = int(s.split(":", 1)[0])
+        except (ValueError, IndexError):
+            self.type = 1
 
     def toString(self):
         return self._s
@@ -631,6 +635,43 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(pool._slots_by_role[Role.EXTERNAL][0].state,
                          SlotState.IDLE)
         self.assertTrue(rec.stopped)
+
+
+class NonDvbGuardTests(unittest.TestCase):
+    """Belt-and-suspenders defence: even if a non-DVB ref reaches the
+    pool through a path the predictor does not cover (e.g. the
+    external-slot arm from the public api), the pool must NOT call
+    recordService with it. The C++ recordable layer SIGABRTs on non-
+    DVB refs and takes the whole enigma2 process down with it.
+    Regression test for the v0.6.4 Pluto-TV crash-loop bug.
+    """
+
+    def test_arm_skips_iptv_ref_no_recordservice_call(self):
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1, Role.PREV: 0, Role.HISTORY: 0})
+        iptv_ref = FakeRef(
+            "4097:0:1:EF:0:0:0:0:0:0:pluto%3a//abc:Pluto TV")
+        pool.arm({Role.NEXT: [iptv_ref]})
+        self.assertEqual(len(nav.allocations), 0,
+                         "IPTV ref must not reach recordService")
+        self.assertEqual(pool._slots_by_role[Role.NEXT][0].state,
+                         SlotState.IDLE,
+                         "slot stays idle after non-DVB target skip")
+
+    def test_arm_skips_file_ref_no_recordservice_call(self):
+        pool, nav, _ = make_pool()
+        pool.configure({Role.EXTERNAL: 1})
+        file_ref = FakeRef("4353:0:1:0:0:0:0:0:0:0:/media/file.ts")
+        pool.arm({Role.EXTERNAL: [file_ref]})
+        self.assertEqual(len(nav.allocations), 0)
+
+    def test_arm_dvb_ref_still_allocates(self):
+        # Positive control: DVB ref (type 1) must still allocate as
+        # before, proving the guard has not become an over-broad reject.
+        pool, nav, _ = make_pool()
+        pool.configure({Role.NEXT: 1})
+        pool.arm({Role.NEXT: [FakeRef("1:0:19:283D:3FB:1:C00000:0:0:0:")]})
+        self.assertEqual(len(nav.allocations), 1)
 
 
 if __name__ == "__main__":

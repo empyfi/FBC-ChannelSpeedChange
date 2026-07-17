@@ -17,6 +17,30 @@ from .logger import info, debug, warn
 # isMarker; filtered via flags & 0x47).
 _SKIP_FLAGS = 0x47  # isDirectory | isMarker | mustDescent | canDescent
 
+# eServiceReference.type value for a DVB broadcast service. Only refs
+# of this type can be pre-tuned via NavigationInstance.recordService -
+# every other type (IPTV=4097/idServiceMP3, file=4353/idFile, stream-
+# based services etc.) routes to a different service handler that
+# either crashes the recordable path in eDVBServiceRecord or would
+# need a completely different prefetch mechanism.
+_TYPE_DVB = 1
+
+
+def is_tunable_dvb(ref):
+    """True when ``ref`` is a DVB service ref safe to feed into the
+    pretune path. Missing or invalid ``type`` attribute counts as
+    non-tunable - the safe fallback keeps malformed refs out of the
+    C++ recordable layer.
+
+    Used by the predictor to filter bouquet neighbours and history
+    entries, by the pool as belt-and-suspenders before recordService,
+    and by the public api to reject caller-supplied non-DVB refs.
+    """
+    try:
+        return int(ref.type) == _TYPE_DVB
+    except (AttributeError, TypeError, ValueError):
+        return False
+
 
 class Predictor:
     """Stateless oracle that reads from injected providers."""
@@ -73,6 +97,9 @@ class Predictor:
                 debug("PREDICT history: skip live %s" % k)
                 continue
             if k in seen:
+                continue
+            if not is_tunable_dvb(ref):
+                debug("PREDICT history: skip non-DVB ref %s" % k)
                 continue
             seen.add(k)
             out.append(ref)
@@ -133,7 +160,7 @@ class Predictor:
                         flags = ref.getFlags()
                     except AttributeError:
                         flags = 0
-                if not (flags & _SKIP_FLAGS):
+                if not (flags & _SKIP_FLAGS) and is_tunable_dvb(ref):
                     services.append(ref)
                 ref = lister.getNext()
             return services

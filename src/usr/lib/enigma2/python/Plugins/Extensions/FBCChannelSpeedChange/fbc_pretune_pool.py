@@ -27,7 +27,7 @@ from .config import cfg as _cfg
 # lives in predictor; importing the alias keeps every pool call site
 # unchanged. _tp_key is the transponder-level partner used by
 # tp_match() for intra-TP channel-share detection.
-from .predictor import _key as _ref_key, _tp_key
+from .predictor import _key as _ref_key, _tp_key, is_tunable_dvb
 
 
 _DUMPED_RECORDABLE_API = False
@@ -324,6 +324,16 @@ class FBCPreTunePool:
                       % target_ref.toString())
                 return
         except Exception:
+            return
+
+        # Non-DVB refs (IPTV Type 4097, file 4353, stream-based
+        # services) crash the C++ recordable layer - eDVBServiceRecord
+        # only handles DVB frontends. The predictor already filters
+        # these out at candidate selection; this second gate covers
+        # any path that feeds a ref directly into arm() (e.g. the
+        # public api's external-slot arm).
+        if not is_tunable_dvb(target_ref):
+            debug("skip non-DVB pretune target %s" % _ref_key(target_ref))
             return
 
         nav = self._nav_provider()

@@ -3,6 +3,60 @@
 All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.4] - 2026-07-16
+
+### Fixed
+- Non-DVB service references (IPTV, HTTP-stream and file-backed
+  services) are no longer routed into the pre-tune path. Before
+  v0.6.4 a zap into an IPTV bouquet (Pluto TV etc.) crash-looped
+  enigma2: the predictor picked up the neighbouring IPTV services
+  as pre-tune candidates, the pool handed them to
+  `NavigationInstance.recordService(...)`, and the C++ recordable
+  layer (`eDVBServiceRecord`) faulted because it only supports DVB
+  frontends. Every subsequent zap tried the same allocation and
+  the box entered a restart loop until the user disabled the
+  plugin or moved out of the IPTV bouquet.
+
+  Predictor now filters bouquet neighbours and history entries by
+  `eServiceReference.type == idDVB` before returning them as
+  candidates. The pool applies the same check as a second-line
+  defence for any path that feeds a ref straight into `arm()`
+  (e.g. the external-slot arm from the public API). The public
+  `PreTuneSingleChannel` / `ReleaseSingleChannel` entry points
+  reject non-DVB object refs with a debug-log line. Zap into the
+  IPTV bouquet still works; only the pre-tune acceleration is
+  skipped for services that are not tunable via a DVB frontend.
+
+- Service-scan dialogs no longer fail with "Fehler beim Start der
+  Suche" when the pre-tune pool happens to hold the frontend the
+  scan requested. Before v0.6.4 the workaround was to disable the
+  plugin manually before every scan; forum-reported on 2026-07-12
+  and reproduced on the test bench on 2026-07-16 with the pool
+  holding Tuner A while the user opened Netzwerksuchlauf.
+
+  The controller now wraps the three scan-related screens
+  (`Screens.ScanSetup.ScanSetup`, `ScanSimple`, and
+  `Screens.ServiceScan.ServiceScan`) with a class-level patch
+  analogous to the v0.6.3 standby wrapper. On the first scan
+  screen opening every pool slot is released and the re-arm cycle
+  is blocked; overlapping scan screens (the openatv stack pushes
+  ServiceScan on top of ScanSetup) share a counter so the block
+  stays in place across the whole scan session. Once the last
+  scan screen closes the block clears and a fresh re-arm is
+  scheduled after 500 ms.
+
+  The wrapper is idempotent per screen; screens the running
+  enigma2 build does not expose are skipped silently and reported
+  via `sanity_check_scan_hook` as optional degradation. The public
+  `PreTuneSingleChannel` API also short-circuits while a scan is
+  active.
+
+### Changed
+- No config surface, no C-binding surface. 39 new tests added
+  (`tests/test_scan.py` with 21 cases, plus IPTV-filter cases in
+  `test_predictor.py`, `test_pool_state.py`, `test_external_api.py`);
+  178 → 217 green.
+
 ## [0.6.3] - 2026-07-05
 
 ### Fixed

@@ -42,6 +42,7 @@ import re
 
 from .logger import debug, error
 from .config import cfg
+from .predictor import is_tunable_dvb
 
 
 # Whitelist for the canonical DVB broadcast serviceref shape, e.g.
@@ -167,6 +168,20 @@ def _coerce_to_serviceref(obj):
     if obj is None:
         return None
     if hasattr(obj, "toString"):
+        # Only DVB refs survive - IPTV / file / stream refs would
+        # crash the pretune path in eDVBServiceRecord. The string-
+        # form already enforces this via the "1:0:" whitelist prefix
+        # in _SREF_SHAPE, so this check only fires for direct object
+        # inputs (a caller handing in an eServiceReference instance
+        # that happens to be an IPTV ref).
+        if not is_tunable_dvb(obj):
+            try:
+                if cfg.debug_log.value:
+                    debug("api: non-DVB ref rejected type=%r"
+                          % getattr(obj, "type", None))
+            except Exception:
+                pass
+            return None
         return obj
     if not isinstance(obj, str):
         return None
