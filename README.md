@@ -178,6 +178,10 @@ python3 /tmp/zap_stats.py
 - ~50 MB free on `/tmp` (the plugin holds throwaway `.ts` files there;
   a background timer punches holes via `fallocate(PUNCH_HOLE)` every
   two seconds so the underlying tmpfs stays well under 5 MB)
+- Only DVB services can be pre-tuned. IPTV, HTTP-stream and
+  file-backed services (Pluto TV etc.) zap as usual but see no
+  acceleration — the pre-tune path uses FBC frontends which those
+  service types do not go through.
 
 ## Install
 
